@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-bs-theme="dark">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1,user-scalable=no">
+    <meta name="format-detection" content="telephone=no">
+    <title>{{user.username}}</title>
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;900&display=swap">
+    
+    <style>
+        /* ======================================================================
+        | ۱. متغیرهای رنگی و تنظیمات عمومی (General Styles & Variables)
+        | ====================================================================== */
+        :root {
+            /* حالت دارک مود بهبود یافته (پیش‌فرض) */
+            --bs-body-font-family: "Vazirmatn", system-ui, -apple-system, sans-serif;
+            --bs-body-bg: #121212;
+            --my-gray: #1e1e1e;
+            --my-dark-gray: #2c2c2c;
+            --my-heading: #ffffff;
+            --my-content: #b3b3b3;
+            --btn-text-color: #ffffff;
+            --btn-hover-bg: #3a3a3a;
+            --success-feedback-color: #059669;
+            --disabled-status-icon-color: #ef4444;
+            --username-icon-color: #3b82f6;
+            --traffic-icon-color: #f97316;
+            --duration-icon-color: #f5a524;
+            --hiddify-color: #0d9488;
+            --streisand-color: #8b5cf6;
+            --android-color: #17c964;
+            --windows-color: #006FEE;
+            --ios-color: #b3b3b3;
+            --border-radius-main: 1rem;
+            --border-color-subtle: rgba(255, 255, 255, 0.1);
+            --box-shadow-subtle: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            --backdrop-blur: blur(10px);
+            --apple-secondary-color: #5b5b5b;
+            --download-link-bg: var(--my-dark-gray);
+            --download-link-hover-bg: var(--btn-hover-bg);
+            --download-link-text-color: var(--my-content);
+            --add-to-app-color: var(--username-icon-color);
+        }
+
+        :root[data-bs-theme="light"] {
+            /* حالت لایت مود بهبود یافته */
+            --bs-body-bg: #f5f5f5;
+            --my-gray: #ffffff;
+            --my-dark-gray: #e0e0e0;
+            --my-heading: #0a0a0a;
+            --my-content: #525252;
+            --btn-text-color: #1a1a1a;
+            --btn-hover-bg: #e0e0e0;
+            --border-color-subtle: rgba(0, 0, 0, 0.05);
+            --box-shadow-subtle: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --backdrop-blur: blur(12px);
+            --download-link-bg: #f5f5f5;
+            --download-link-hover-bg: #d4d4d4;
+            --download-link-text-color: #3a3a3a;
+        }
+
+        body {
+            background-color: var(--bs-body-bg);
+            color: var(--my-content); /* رنگ متن اصلی */
+            font-family: var(--bs-body-font-family);
+            transition: background-color 0.3s ease;
+        }
+
+        .my-block {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 16px;
+}
+
+.links-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.scrollable {
+    max-height: 400px;
+    overflow-y: auto;
+    direction: ltr;
+    box-sizing: border-box;
+    padding-right: 2px;
+}
+
+.scrollable::-webkit-scrollbar {
+    width: 6px;
+}
+
+.scrollable::-webkit-scrollbar-thumb {
+    background-color: rgba(0,0,0,0.3);
+    border-radius: 3px;
+}
+
+.scrollable::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.link-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fff;
+    padding: 12px 16px;
+    border-radius: 8px;
+}
+
+.link-key {
+    font-weight: bold;
+    color: #333;
+}
+
+.link-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    padding: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.icon-btn:hover {
+    background: rgba(0,0,0,0.05);
+}
+
+.icon-btn svg {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    stroke: black;
+    display: block;
+}
+
+.qr-modal #qrCanvas {
+    width: 100%;
+    max-width: 600px; /* حداکثر اندازه QR */
+    height: auto;
+}
+
+.modal-header {
+    border-bottom: none;
+}
+
+/* پیام کپی */
+#copyToast {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #000;
+    color: #fff;
+    padding: 16px 24px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: bold;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 9999;
+}
+
+#copyToast.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.05);
+}
+
+
+
+        .my-container {
+            max-width: 1024px;
+            padding: clamp(50px, 5vw, 75px) clamp(15px, 2.5vw, 25px);
+            margin: 0 auto;
+        }
+
+        /* ======================================================================
+        | ۲. بخش هدر و اطلاعات کاربر (Header & User Info)
+        | ====================================================================== */
+        .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2.5rem; }
+        .header-title-section { display: flex; align-items: center; gap: 1rem; }
+        .header-buttons-section { display: flex; align-items: center; gap: 0.75rem; }
+        .user-avatar { width: 100px; height: 100px; border-radius: 50%; overflow: hidden; background-color: var(--my-gray); border: 4px solid var(--my-gray); box-shadow: 0 0 0 4px var(--traffic-icon-color); flex-shrink: 0; margin-left: 1rem; }
+        [dir="ltr"] .user-avatar { margin-left: 0; margin-right: 1rem; }
+        .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .theme-toggle, .lang-toggle, .modal-close-btn { 
+            width: 48px; height: 48px; border-radius: 50%; 
+            background-color: var(--my-dark-gray); 
+            color: var(--my-heading); 
+            border: 1px solid var(--border-color-subtle); 
+            padding: 0; display: flex; align-items: center; justify-content: center; 
+            transition: background-color 0.2s ease, color 0.2s ease; 
+        }
+        .theme-toggle:hover, .lang-toggle:hover, .modal-close-btn:hover { background-color: var(--btn-hover-bg); }
+        .modal-close-btn { font-size: 1.5rem; line-height: 1; padding: 0.25rem; width: auto; height: auto; border-radius: 0.5rem; background-color: transparent; color: var(--my-content); border: none; }
+        .theme-toggle svg, .lang-toggle svg { width: 22px; height: 22px; fill: currentColor; }
+
+
+        /* ======================================================================
+        | ۳. استایل‌های بلاک‌های اطلاعاتی و دکمه‌ها (Blocks & Buttons)
+        | ====================================================================== */
+        .my-text-heading { color: var(--my-heading); font-weight: 700; font-size: 1.5rem; }
+        .my-text-content { color: var(--my-content); font-weight: 500; }
+
+        .my-block, .my-block-big {
+            border-radius: var(--border-radius-main);
+            background-color: var(--my-gray);
+            padding: 1.5rem;
+            height: 100%;
+            border: 1px solid var(--border-color-subtle); 
+            box-shadow: var(--box-shadow-subtle); 
+            transition: all 0.3s ease;
+        }
+        
+        .my-block-big { display: flex; flex-direction: column; }
+
+        .my-block:hover, .my-block-big:hover { background-color: var(--my-dark-gray); }
+
+        .traffic-value { font-family: monospace, inherit; direction: ltr; font-weight: 600; }
+        .bi { fill: currentColor; width: 20px; height: 20px; }
+
+        /* Icon Colors */
+        .my-block svg use[href="#check-circle"] { color: var(--success-feedback-color); }
+        .my-block svg use[href="#clock"] { color: var(--duration-icon-color); }
+        .my-block svg use[href="#arrow-down-circle"] { color: var(--traffic-icon-color); }
+        .my-block-big svg use[href="#microsoft"] { color: var(--windows-color); }
+        .my-block-big svg use[href="#android"] { color: var(--android-color); }
+        .my-block-big svg use[href="#hiddify"] { color: var(--hiddify-color); }
+        .my-block-big svg use[href="#streisand"] { color: var(--streisand-color); }
+        .config-link-name svg use[href="#microsoft"] { color: var(--windows-color); }
+        .config-link-name svg use[href="#android"] { color: var(--android-color); }
+        .download-detail-block svg use[href="#apple"] { color: var(--ios-color); }
+
+        /* Connection Buttons */
+        .connection-buttons { display: flex; flex-direction: column; gap: 1.25rem; margin-bottom: 2.5rem; }
+        @media (min-width: 576px) { .connection-buttons { flex-direction: row; } }
+        .my-btn-outline { --bs-btn-color: var(--btn-text-color); border: none; --bs-btn-hover-color: var(--bs-body-bg); --bs-btn-hover-bg: var(--traffic-icon-color); --bs-btn-active-color: var(--bs-body-bg); --bs-btn-active-bg: var(--traffic-icon-color); --bs-border-radius: 0.75rem; width: 100%; padding: 1rem 1.5rem; background-color: transparent; border: 2px solid var(--traffic-icon-color); font-size: 1.1rem; font-weight: 600; transition: all 0.2s ease; }
+        .my-btn-outline:hover { background-color: var(--traffic-icon-color); color: var(--bs-body-bg); }
+
+        /* Download Button */
+        .download-button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .download-button {
+            height: 44px;
+            box-sizing: border-box;
+            border-radius: 0.6rem;
+            background-color: var(--download-link-bg); 
+            color: var(--download-link-text-color);
+            border: 1px solid var(--border-color-subtle);
+            flex-shrink: 0;
+            transition: background-color 0.2s ease, color 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+            text-decoration: none;
+            padding: 0 1rem;
+            font-size: 0.95rem;
+        }
+
+        .download-button:hover { background-color: var(--download-link-hover-bg); color: var(--my-heading); }
+
+        .download-button.primary-download {
+            background-color: var(--hiddify-color);
+            color: white;
+            border: 1px solid var(--hiddify-color);
+            font-weight: 600;
+        }
+
+        .download-button.primary-download:hover {
+            background-color: var(--hiddify-color);
+            opacity: 0.9;
+            color: white;
+        }
+        
+        /* New Add to App Button Style */
+        .download-button.add-to-app-btn {
+            background-color: var(--add-to-app-color);
+            color: white;
+            border: 1px solid var(--add-to-app-color);
+            font-weight: 600;
+            margin-top: 0.75rem;
+            height: 50px;
+            font-size: 1rem;
+        }
+        .download-button.add-to-app-btn:hover {
+            background-color: color-mix(in srgb, var(--add-to-app-color) 90%, black);
+            color: white;
+            opacity: 0.9;
+        }
+
+
+        .download-detail-block {
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            background-color: var(--my-dark-gray);
+            border: 1px solid var(--border-color-subtle);
+        }
+        .download-detail-block h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--my-heading);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Steps Counter */
+        .my-step-counter { font-size: 3rem; font-weight: 900; line-height: 1; color: var(--traffic-icon-color); opacity: 0.6; user-select: none; text-align: right; display: block; }
+        .row.g-4 { counter-reset: step-counter; }
+        .my-step-counter::before { content: counter(step-counter); counter-increment: step-counter; }
+        [dir="ltr"] .my-step-counter { text-align: left; }
+        
+    </style>
+    
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
+    
+    <script>
+        // تعریف شیء 'app' برای استفاده توسط Alpine.js
+        window.app = {
+            // تعیین تم اولیه بر اساس data-bs-theme موجود یا localStorage
+            darkMode: document.documentElement.getAttribute('data-bs-theme') === 'dark',
+            
+            init() {
+                // چک کردن localStorage در زمان لود شدن
+                const savedTheme = localStorage.getItem('theme');
+                const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                
+                let initialTheme = 'dark'; // پیش‌فرض کد شما dark است
+                
+                if (savedTheme) {
+                    initialTheme = savedTheme;
+                } else if (!systemPrefersDark) {
+                    // اگر چیزی ذخیره نشده و سیستم هم dark نیست، به light بروید (برای رعایت ترجیحات سیستمی)
+                    initialTheme = 'light';
+                }
+
+                this.darkMode = initialTheme === 'dark';
+                this.applyTheme();
+            },
+
+            applyTheme() {
+                const theme = this.darkMode ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-bs-theme', theme);
+                localStorage.setItem('theme', theme);
+            },
+
+            toggleTheme() {
+                this.darkMode = !this.darkMode;
+                this.applyTheme();
+            }
+        }
+        
+        // توابع کمکی که در HTML استفاده شده‌اند
+        function copyLink(linkId) {
+            // لینک واقعی را اینجا قرار دهید
+            const link = "https://your-server.com/sub/token"; 
+            navigator.clipboard.writeText(link).then(() => {
+                alert("لینک اشتراک کپی شد!");
+            }).catch(err => {
+                console.error('Could not copy text: ', err);
+                alert("کپی انجام نشد. لطفا دستی کپی کنید.");
+            });
+        }
+
+        function openHAPPWithSubscription(linkId) {
+            const link = "happ://add/{{ user.subscription_url }}"; // لینک واقعی را جایگزین کنید
+            window.location.href = link;
+        }
+        function openv2rayngWithSubscription(linkId) {
+            const link = "v2rayng://install-config/?url={{ user.subscription_url }}"; // لینک واقعی را جایگزین کنید
+            window.location.href = link;
+        }
+
+        function openStreisandWithSubscription(linkId) {
+            const link = "streisand://import/{{ user.subscription_url }}"; // لینک واقعی را جایگزین کنید
+            window.location.href = link;
+        } 
+        
+        function openStreisandtraffic(linkId) {
+            const link = "streisand://aW1wb3J0L3JvdXRlOi8vWW5Cc2FYTjBNRERWQVFJREJBVUdEaU1rSlZWeWRXeGxjMTFrYjIxaGFXNU5ZWFJqYUdWeVZHNWhiV1ZlWkc5dFlXbHVVM1J5WVhSbFozbFVkWFZwWktJSEZ0VUlDUW9MREEwT0R4SVZXMjkxZEdKdmRXNWtWR0ZuWFdSdmJXRnBiazFoZEdOb1pYSldaRzl0WVdsdVVtbHdWMjVsZEhkdmNtdFdaR2x5WldOMFZtaDVZbkpwWktJUUVWOFFFMmRsYjNOcGRHVTZZMkYwWldkdmNua3RhWEpmRUE5eVpXZGxlSEE2TGlwY1hDNXBjaVNpRXhSWVoyVnZhWEE2YVhKZFoyVnZhWEE2Y0hKcGRtRjBaVjhRUkZSRFVDd2dWVVJRTENCSVZGUlFMQ0JJVkZSUVV5d2dVMU5JTENCVFRWUlFMQ0JUVGsxUUxDQk9WRkFzSUVaVVVDd2dVRTlRTXl3Z1NVMUJVQ3dnVkdWc2JtVjAxQmNZQ2d3WkRob1ZXMjkxZEdKdmRXNWtWR0ZuWFdSdmJXRnBiazFoZEdOb1pYSlZZbXh2WTJ1b0d4d2RIaDhnSVNKZkVCaG5aVzl6YVhSbE9tTmhkR1ZuYjNKNUxXRmtjeTFoYkd4ZkVCUm5aVzl6YVhSbE9tTmhkR1ZuYjNKNUxXRmtjMThRRVdkbGIzTnBkR1U2ZVdGb2IyOHRZV1J6WHhBVFoyVnZjMmwwWlRwemNHOTBhV1o1TFdGa2MxOFFFbWRsYjNOcGRHVTZaMjl2WjJ4bExXRmtjMThRRVdkbGIzTnBkR1U2WVhCd2JHVXRZV1J6WHhBU1oyVnZjMmwwWlRwaGJXRjZiMjR0WVdSelh4QVJaMlZ2YzJsMFpUcGhaRzlpWlMxaFpITnVBRWtBVWdBdEFFUUFhUUJ5QUdVQVl3QjBBQ0RZUE4zdTJEemQ5MXhKVUVsbVRtOXVUV0YwWTJoZkVDUTNNamt5T1RCRlJDMUdSVFpCTFRReE9VVXRPVE15TmkxRE1rVkJOREl3UmpWQk0wTUFDQUFUQUJrQUp3QXNBRHNBUUFCREFFNEFXZ0JvQUc4QWNnQjZBSUVBaUFDTEFLRUFzd0MyQUw4QXpRRVVBUjBCS1FFM0FUMEJSZ0ZoQVhnQmpBR2lBYmNCeXdIZ0FmUUNFUUllQUFBQUFBQUFBZ0VBQUFBQUFBQUFKZ0FBQUFBQUFBQUFBQUFBQUFBQUFrVT0="; // لینک واقعی را جایگزین کنید
+            window.location.href = link;
+        }         
+    </script>
+</head>
+
+<body x-data="window.app" x-init="init">
+    <div class="my-container">
+        
+        <header class="page-header">
+            <div class="header-title-section">
+                <div class="user-avatar">
+                    <div class="user-avatar-placeholder">N</div>
+                </div>
+                <div>
+                    <h1 class="my-text-heading mb-0" style="font-size: 1.8rem;">
+                        <span class="d-flex align-items-center">
+                            {{user.username}}
+                        </span>
+                    </h1>
+                    <!-- <p class="my-text-content mb-0">کاربر سرویس اتصال ویژه</p> -->
+                </div>
+            </div>
+            <div class="header-buttons-section">
+                <!-- <button type="button" class="lang-toggle" title="تغییر زبان" aria-label="تغییر زبان">
+                    <svg class="bi"><use href="#translate"></use></svg>
+                </button> -->
+                <button type="button" class="theme-toggle" @click="toggleTheme" title="تغییر تم" aria-label="تغییر تم">
+                    <template x-if="darkMode">
+                        <svg class="bi"><use href="#moon"></use></svg>
+                    </template>
+                    <template x-if="!darkMode">
+                        <svg class="bi"><use href="#sun"></use></svg>
+                    </template>
+                </button>
+            </div>
+        </header>
+        
+        <hr class="my-4 border-secondary opacity-25">
+        
+        <div class="row g-4 mb-4">
+            <div class="col-lg-4 col-md-4"><div class="my-block">
+                <h3 class="my-text-heading d-flex align-items-center mb-3"><svg class="bi me-2"><use href="#check-circle"></use></svg>وضعیت</h3>
+                <p class="my-text-content mb-0" style="font-size: 1.2rem; color: var(--success-feedback-color); font-weight: 700;">{{user.status}}</p>
+            </div></div>
+            <div class="col-lg-4 col-md-4"><div class="my-block">
+                <h3 class="my-text-heading d-flex align-items-center mb-3"><svg class="bi me-2"><use href="#clock"></use></svg>مدت باقی‌مانده</h3>
+                <p class="my-text-content mb-0" style="font-size: 1.2rem;"><span class="traffic-value">{{user.remaining_days }}</span></p>
+            </div></div>
+            <div class="col-lg-4 col-md-4"><div class="my-block">
+                <h3 class="my-text-heading d-flex align-items-center mb-3"><svg class="bi me-2"><use href="#arrow-down-circle"></use></svg>ترافیک باقی مانده</h3>
+                <p class="my-text-content mb-0" style="font-size: 1.2rem;"><span class="traffic-value">{{user.remaining_volume}}</span> </p>
+            </div></div>
+        </div>
+
+
+
+
+
+
+<!-- ========================= کتابخانه QR Code ========================= -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- ========================= بخش «اشتراک من» ========================= -->
+<section class="my-block mb-4 p-3">
+    <h3 class="my-text-heading mb-3">اشتراک های من</h3>
+    <p class="my-text-content mb-4">برای دریافت لینک و QR کد اشتراک روی دکمه‌ها کلیک کنید</p>
+
+    <div class="links-list scrollable">
+        <!-- لینک اشتراک اصلی -->
+        <div class="link-card">
+            <span class="link-key">لینک سابسکریپشن</span>
+            <div class="link-actions">
+                <button data-url="{{ user.subscription_url }}" onclick="copyLink(this)" title="کپی لینک" class="icon-btn">                    <!-- آیکون کپی -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+                        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+                    </svg>
+                </button>
+                <button data-url="{{ user.subscription_url }}" onclick="showBigQR(this)" title="نمایش QR" class="icon-btn">                    <!-- آیکون QR -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="5" height="5" x="3" y="3" rx="1"></rect>
+                        <rect width="5" height="5" x="16" y="3" rx="1"></rect>
+                        <rect width="5" height="5" x="3" y="16" rx="1"></rect>
+                        <path d="M21 16h-3a2 2 0 0 0-2 2v3"></path>
+                        <path d="M21 21v.01"></path>
+                        <path d="M12 7v3a2 2 0 0 1-2 2H7"></path>
+                        <path d="M3 12h.01"></path>
+                        <path d="M12 3h.01"></path>
+                        <path d="M12 16v.01"></path>
+                        <path d="M16 12h1"></path>
+                        <path d="M21 12v.01"></path>
+                        <path d="M12 21v-1"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- لینک‌های اضافی از دیکشنری -->
+        {% for link_dict in user.additional_links %}
+        {% for key, url in link_dict.items() %}
+            <div class="link-card">
+                <span class="link-key">{{ key }}</span>
+                <div class="link-actions">
+                    <button data-url="{{ url }}" onclick="copyLink(this)" title="کپی لینک" class="icon-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+                            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+                        </svg>
+                    </button>
+                    <button data-url="{{ url }}" onclick="showBigQR(this)" title="نمایش QR" class="icon-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="5" height="5" x="3" y="3" rx="1"></rect>
+                            <rect width="5" height="5" x="16" y="3" rx="1"></rect>
+                            <rect width="5" height="5" x="3" y="16" rx="1"></rect>
+                            <path d="M21 16h-3a2 2 0 0 0-2 2v3"></path>
+                            <path d="M21 21v.01"></path>
+                            <path d="M12 7v3a2 2 0 0 1-2 2H7"></path>
+                            <path d="M3 12h.01"></path>
+                            <path d="M12 3h.01"></path>
+                            <path d="M12 16v.01"></path>
+                            <path d="M16 12h1"></path>
+                            <path d="M21 12v.01"></path>
+                            <path d="M12 21v-1"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        {% endfor %}
+    {% endfor %}
+    
+    </div>
+</section>
+
+<!-- ========================= مودال QR بزرگ ========================= -->
+<div class="modal fade" id="bigQRModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content qr-modal p-3">
+          <div class="modal-header border-0">
+              <h5 class="modal-title">QR کد لینک</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body d-flex justify-content-center">
+              <canvas id="qrCanvas"></canvas>
+          </div>
+      </div>
+  </div>
+</div>
+
+<!-- ========================= پیام کپی ========================= -->
+<div id="copyToast">لینک کپی شد!</div>
+
+<!-- ========================= SCRIPT ========================= -->
+<script>
+function copyLink(btn) {
+    const url = btn.getAttribute("data-url");
+    navigator.clipboard.writeText(url).then(() => {
+        const toast = document.getElementById("copyToast");
+        toast.classList.add("show");
+        setTimeout(() => toast.classList.remove("show"), 2000);
+    });
+}
+
+function showBigQR(btn) {
+    const url = btn.getAttribute("data-url");
+    const canvas = document.getElementById('qrCanvas');
+
+    // محاسبه اندازه QR بر اساس عرض صفحه
+    const viewportWidth = window.innerWidth;
+    let size;
+    if(viewportWidth < 600){
+        size = viewportWidth * 0.9; // موبایل: 90% عرض صفحه
+    } else if(viewportWidth < 992){
+        size = 400; // تبلت
+    } else {
+        size = 400; // دسکتاپ: بزرگتر
+    }
+
+    QRCode.toCanvas(canvas, url, { width: size, color: { dark: '#000', light: '#fff' } }, function (error) {
+        if (error) console.error(error);
+    });
+
+    const modal = new bootstrap.Modal(document.getElementById('bigQRModal'));
+    modal.show();
+}
+</script>
+
+<!-- ========================= STYLE ========================= -->
+
+
+
+
+
+        
+        <h2 class="my-text-heading mb-4 mt-5">دانلود و نصب برنامه‌های مورد نیاز</h2>
+        <div class="row g-4">
+            
+            <div class="col-lg-4 col-md-6">
+                <div class="my-block-big equal-height-container">
+                    <span class="my-step-counter mb-3"></span>
+                    <h3 class="my-text-heading d-flex align-items-center mb-3" style="color: var(--hiddify-color);">
+                        <svg class="bi me-2"><use href="#hiddify"></use></svg>
+                        Happ (اندروید)
+                    </h3>
+                    <p class="my-text-content">پیشنهاد اول ما: کلاینت رسمی Happ برای اندروید (نسخه جدید و پایدار).</p>
+                    <p class="my-text-content mb-0" style="font-size: 0.9rem; color: var(--username-icon-color);">سازگار با اندروید ۵ و بالاتر.                    </p>
+
+                    <div class="mt-auto pt-3 download-button-group">
+                        <a href="https://github.com/Happ-proxy/happ-android/releases/latest/download/Happ.apk" class="download-button primary-download" target="_blank" title="دانلود مستقیم Happ اندروید">
+                            <svg class="bi me-2"><use href="#cloud-arrow-down"></use></svg>
+                            دانلود مستقیم فایل APK
+                        </a>
+                        <a href="https://play.google.com/store/apps/details?id=com.happproxy" class="download-button" target="_blank" title="دانلود از گوگل پلی">
+                          <svg class="bi me-2"><use href="#google-play"></use></svg>
+                          Google Play Store
+                        </a>
+                        <a href="https://github.com/Happ-proxy" class="download-button" target="_blank" title="صفحه پروژه Happ در گیت‌هاب">
+                            <svg class="bi me-2"><use href="#github"></use></svg>
+                            صفحه پروژه (GitHub)
+                        </a>
+                        <button type="button" class="download-button add-to-app-btn" onclick="openHAPPWithSubscription('subscription_link')">
+                            <svg class="bi me-2"><use href="#plus-circle"></use></svg>
+                            افزودن مستقیم به برنامه
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <div class="my-block-big equal-height-container">
+                    <span class="my-step-counter mb-3"></span>
+                    <h3 class="my-text-heading d-flex align-items-center mb-3" style="color: var(--hiddify-color);">
+                        <svg class="bi me-2"><use href="#hiddify"></use></svg>
+                        V2RayNG (اندروید)
+                    </h3>
+                    <p class="my-text-content">برنامه پیشنهادی و رسمی برای گوشی‌ها و تبلت‌های اندروید.</p>
+                    <p class="my-text-content mb-0" style="font-size: 0.9rem; color: var(--username-icon-color);">سازگار با اندروید ۵ و بالاتر.</p>
+
+                    <div class="mt-auto pt-3 download-button-group">
+                        <a href="https://github.com/2dust/v2rayNG/releases/download/1.10.18/v2rayNG_1.10.18_universal.apk" class="download-button primary-download" target="_blank" title="دانلود مستقیم Happ اندروید (APK)">
+                            <svg class="bi me-2"><use href="#cloud-arrow-down"></use></svg>
+                            دانلود مستقیم فایل APK
+                        </a>
+                        <a href="https://github.com/2dust/v2rayNG/releases/download/1.10.18/v2rayNG_1.10.18_universal.apk" class="download-button" target="_blank" title="لینک کمکی Streisand">
+                          <svg class="bi me-2"><use href="#link-45deg"></use></svg>
+                          لینک کمکی
+                       </a>
+                        <a href="https://github.com/2dust/v2rayNG" class="download-button" target="_blank" title="صفحه پروژه Happ در گیت‌هاب">
+                          <svg class="bi me-2"><use href="#github"></use></svg>
+                          صفحه پروژه (GitHub)
+                       </a>
+                        <button type="button" class="download-button add-to-app-btn" onclick="openv2rayngWithSubscription('subscription_link')">
+                            <svg class="bi me-2"><use href="#plus-circle"></use></svg>
+                            افزودن مستقیم به برنامه
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+                <div class="my-block-big equal-height-container">
+                    <span class="my-step-counter mb-3"></span>
+                    <h3 class="my-text-heading d-flex align-items-center mb-3" style="color: var(--streisand-color);">
+                        <svg class="bi me-2"><use href="#streisand"></use></svg>
+                        streisand (آیفون)
+                    </h3>
+                    <p class="my-text-content">پیشنهاد اول ما:سریع، امن و مجهز به امکانات V2Ray و قابلیت‌های پیشرفته.</p>
+                    <p class="my-text-content mb-0" style="font-size: 0.9rem; color: var(--username-icon-color);">یک کلاینت پیشرفته با پشتیبانی از V2Ray </p>
+
+                    <div class="mt-auto pt-3 download-button-group">
+                        <a href="https://apps.apple.com/us/app/happ-proxy-utility/id6504287215" class="download-button primary-download" target="_blank" title="دانلود مستقیم Streisand">
+                            <svg class="bi me-2"><use href="#cloud-arrow-down"></use></svg>
+                            دانلود از اپ استور 
+                        </a>
+                        <p class="my-text-content mb-0" style="font-size: 0.9rem; color: var(--username-icon-color);"> با اضافه کردن مسیریابی, وب سایت ها و برنامه های داخلی از VPN عبور داده نمیشود </p>
+
+                        <button type="button" class="download-button add-to-app-btn" onclick="openStreisandtraffic('subscription_link')">
+                            <svg class="bi me-2"><use href="#microsoft"></use></svg>
+                            افزودن مسیریابی
+                        </button>
+
+
+                        <button type="button" class="download-button add-to-app-btn" onclick="openStreisandWithSubscription('subscription_link')">
+                          <svg class="bi me-2"><use href="#plus-circle"></use></svg>
+                          افزودن مستقیم به برنامه
+                      </button>
+
+
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6">
+              <div class="my-block-big equal-height-container">
+                  <span class="my-step-counter mb-3"></span>
+                  <h3 class="my-text-heading d-flex align-items-center mb-3" style="color: var(--streisand-color);">
+                      <svg class="bi me-2"><use href="#streisand"></use></svg>
+                      Happ (آیفون)
+                  </h3>
+                  <p class="my-text-content">تجربه اتصال مطمئن و سریع روی آیفون.</p>
+                  <p class="my-text-content mb-0" style="font-size: 0.9rem; color: var(--username-icon-color);">در صورت عدم کارکرد streisand این گزینه را امتحان کنید.</p>
+
+                  <div class="mt-auto pt-3 download-button-group">
+                      <a href="https://apps.apple.com/us/app/streisand/id6450534064" class="download-button primary-download" target="_blank" title="دانلود مستقیم Streisand">
+                          <svg class="bi me-2"><use href="#cloud-arrow-down"></use></svg>
+                          دانلود از اپ استور 
+                      </a>
+                      <a href="https://apps.apple.com/us/app/streisand/id6450534064" class="download-button" target="_blank" title="لینک کمکی Streisand">
+                          <svg class="bi me-2"><use href="#link-45deg"></use></svg>
+                        لینک کمکی
+                      </a>
+                      <a href="https://github.com/Happ-proxy" class="download-button" target="_blank" title="صفحه پروژه Streisand در گیت‌هاب">
+                          <svg class="bi me-2"><use href="#github"></use></svg>
+                          صفحه پروژه (GitHub)
+                      </a>
+                      <button type="button" class="download-button add-to-app-btn" onclick="openHAPPWithSubscription('subscription_link')">
+                        <svg class="bi me-2"><use href="#plus-circle"></use></svg>
+                        افزودن مستقیم به برنامه
+                      </button>
+                  </div>
+              </div>
+          </div>
+
+            <div class="col-lg-4 col-md-6">
+              <div class="my-block-big equal-height-container">
+                  <span class="my-step-counter mb-3"></span>
+                  <h3 class="my-text-heading d-flex align-items-center mb-3" style="color: var(--android-color);">
+                      <svg class="bi me-2"><use href="#android"></use></svg>
+                      Happ (ویندوز)
+                  </h3>
+                  <p class="my-text-content">کلاینت محبوب و قابل اعتماد V2Ray برای کاربران ویندوز.</p>
+                  <p class="my-text-content mb-0" style="font-size: 0.9rem; color: var(--username-icon-color);">کاملا سازگار با ویندوز های 10و11</p>
+                  
+                  <div class="mt-auto pt-3 download-button-group">
+                      <a href="https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x64.exe" class="download-button primary-download" target="_blank" title="دانلود مستقیم V2RayNG (APK)">
+                          <svg class="bi me-2"><use href="#cloud-arrow-down"></use></svg>
+                          دانلود فایل مستقیم EXE
+                      </a>
+                      <a href="https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x64.exe" class="download-button" target="_blank" title="لینک کمکی Streisand">
+                        <svg class="bi me-2"><use href="#link-45deg"></use></svg>
+                        لینک کمکی
+                      </a>
+                      <a href="https://github.com/Happ-proxy" class="download-button" target="_blank" title="صفحه پروژه V2RayNG در گیت‌هاب">
+                          <svg class="bi me-2"><use href="#github"></use></svg>
+                          صفحه پروژه (GitHub)
+                      </a>
+                      <button type="button" class="download-button add-to-app-btn" onclick="openHAPPWithSubscription('subscription_link')">
+                        <svg class="bi me-2"><use href="#plus-circle"></use></svg>
+                        افزودن مستقیم به برنامه
+                      </button>
+                  </div>
+              </div>
+          </div>
+            <!-- <div class="col-lg-4 col-md-6">
+                <div class="my-block-big equal-height-container">
+                    <span class="my-step-counter mb-3"></span>
+                    <h3 class="my-text-heading d-flex align-items-center mb-3" style="color: var(--ios-color);">
+                        <svg class="bi me-2"><use href="#apple"></use></svg>
+                        آیفون و آیپد (iOS)
+                    </h3>
+                    <p class="my-text-content">راهنمای استفاده از برنامه‌های پیشنهادی برای سیستم عامل iOS.</p>
+                    <p class="my-text-content mb-0" style="font-size: 0.9rem; color: var(--username-icon-color);">توجه: برای دانلود مستقیم، ممکن است نیاز به اپل آیدی غیر ایرانی باشد.</p>
+
+                    <div class="mt-auto pt-3">
+                        <div class="download-detail-block">
+                            <h4><svg class="bi" style="color: var(--streisand-color);"><use href="#lightning-charge"></use></svg>کلاینت پیشنهادی اول: Shadowrocket</h4>
+                            <div class="download-button-group p-0 m-0 border-0">
+                                <a href="iOS_Shadowrocket_AppStore_Link" class="download-button" target="_blank" style="border-color: var(--apple-secondary-color); color: var(--ios-color);" title="دانلود Shadowrocket از اپ استور">
+                                    <svg class="bi me-2"><use href="#app-store"></use></svg>
+                                    App Store
+                                </a>
+                            </div>
+                        </div>
+
+                        <button type="button" class="download-button add-to-app-btn" onclick="copyLink('subscription_link')">
+                            <svg class="bi me-2"><use href="#plus-circle"></use></svg>
+                            افزودن با کپی لینک
+                        </button>
+                    </div>
+                </div>
+            </div> -->
+            
+            <div class="col-lg-4 col-md-6">
+                <div class="my-block-big equal-height-container">
+                    <span class="my-step-counter mb-3"></span>
+                    <h3 class="my-text-heading d-flex align-items-center mb-3" style="color: var(--username-icon-color);">
+                        <svg class="bi me-2"><use href="#question-circle"></use></svg>
+                        پشتیبانی و سوالات متداول
+                    </h3>
+                    <p class="my-text-content">در صورت بروز مشکل یا نیاز به راهنمایی بیشتر، به کانال تلگرام مراجعه کرده یا با پشتیبانی تماس بگیرید.</p>
+                    <p class="my-text-content mb-0" style="font-size: 0.9rem; color: var(--username-icon-color);">برای اتصال سریعتر، همیشه از لینک سابسکریپشن استفاده کنید.</p>
+
+                    <div class="mt-auto pt-3 download-button-group">
+                        <a href="https://t.me/v2ray_nonstop_support" class="download-button" style="background-color: var(--username-icon-color); color: white; border-color: var(--username-icon-color); font-weight: 600;" target="_blank">
+                            <svg class="bi me-2"><use href="#info-circle"></use></svg>
+                            تماس مستقیم با پشتیبانی
+                        </a>
+                        <a href="https://t.me/v2ray_nonstop_channel" class="download-button" style="background-color: #0088cc; color: white; border-color: #0088cc;" target="_blank">
+                            <svg class="bi me-2"><use href="#telegram"></use></svg>
+                            کانال تلگرام
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+        </div> 
+        <!-- <p class="my-text-content text-center mt-5" style="font-size: 0.9rem;">
+            توسعه و نگهداری توسط <a href="#" class="text-decoration-none" style="color: var(--traffic-icon-color);">Service Provider</a>
+        </p> -->
+    </div>
+
+    <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+        <symbol id="moon" viewBox="0 0 16 16"><path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.27 7.29 7.29 7.29 1.576 0 3.018-.583 4.193-1.576A.768.768 0 0 1 16 12.63c0 .34-.418.66-1.157.66h-.043c-.496 0-1.077-.168-1.517-.438a9.191 9.191 0 0 1-5.71-8.381c0-2.47-.837-4.706-2.285-6.379z"/></symbol>
+        <symbol id="sun" viewBox="0 0 16 16"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6m0 1a4 4 0 1 1 0-8 4 4 0 0 1 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.414a.5.5 0 1 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/></symbol>
+        <symbol id="translate" viewBox="0 0 16 16"><path d="M4.545 6.714 4.5 13H3l-1.5-4H.5v4H1v-3.418L2.454 4H3l1.545 4zM7 5h2v1h-2zM9 7h2v1h-2zM11 9h2v1h-2zM13 11h2v1h-2zM4.5 3.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2zM10.5 3.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></symbol>
+        <symbol id="check-circle" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="m10.97 4.97-.02.022-3.473 4.425-2.094-2.093a.75.75 0 0 0-1.06 1.06L6.92 11.45a.75.75 0 0 0 1.057.001l3.568-4.548a.75.75 0 0 0-.44-1.24z"/></symbol>
+        <symbol id="clock" viewBox="0 0 16 16"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></symbol>
+        <symbol id="arrow-down-circle" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1 8a7 7 0 1 0 14 0A7 7 0 0 0 1 8m15 0A8 8 0 1 1 0 8a8 8 0 0 1 16 0M8.5 4.5a.5.5 0 0 0-1 0v5.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293z"/></symbol>
+        <symbol id="hiddify" viewBox="0 0 16 16"><path d="M8 0C3.582 0 0 3.582 0 8s3.582 8 8 8 8-3.582 8-8-3.582-8-8-8M5.8 4.2C5.4 4.2 5.1 4.5 5.1 4.9c0 .4.3.7.7.7h.8c.4 0 .7.3.7.7s-.3.7-.7.7H5.8c-1.1 0-2 .9-2 2s.9 2 2 2h4.4c.4 0 .7.3.7.7s-.3.7-.7.7H5.8c-1.1 0-2 .9-2 2s.9 2 2 2h4.4c1.1 0 2-.9 2-2s-.9-2-2-2h-.8c-.4 0-.7-.3-.7-.7s.3-.7.7-.7h.8c1.1 0 2-.9 2-2s-.9-2-2-2H5.8c-.4 0-.7-.3-.7-.7s.3-.7.7-.7h4.4c1.1 0 2-.9 2-2s-.9-2-2-2H5.8z"/></symbol>
+        <symbol id="android" viewBox="0 0 16 16"><path d="M12.553 4.275h.212a.5.5 0 0 1 .5.5v1.5a.5.5 0 0 1-.5.5h-.212zM3.447 4.275H3.235a.5.5 0 0 0-.5.5v1.5a.5.5 0 0 0 .5.5h.212z"/><path d="M6.556 4.67A.5.5 0 0 0 7 5.17l-.5 3.5a.5.5 0 0 1-.453.485l-1.353.111a.5.5 0 0 1-.497-.577l.5-3.5a.5.5 0 0 0-.455-.526zM9.444 4.67a.5.5 0 0 1-.455.526l.5 3.5a.5.5 0 0 0 .497.577l1.353-.111a.5.5 0 0 0 .453-.485l-.5-3.5a.5.5 0 0 1-.455-.526z"/><path d="M7 11.235c0 .358.298.65.666.65h.668c.369 0 .666-.292.666-.65v-.65H7zm-3.874-6.436C3.42 5.19 3 5.4 3 6v1H.5c-.276 0-.5.224-.5.5v.5c0 .085.034.16.088.216l.912.912V15.5c0 .276.224.5.5.5h13c.276 0 .5-.224.5-.5V9.128l.912-.912a.552.552 0 0 0 .088-.216v-.5c0-.276-.224-.5-.5-.5H13V6c0-.6-.42-1.056-.574-1.393L11.5 1.5H8.5L7.5.5 6.5 1.5H4.5L3.126 4.799zM.5 8h15V6c0-.077-.024-.15-.072-.213L13.5 3h-2L10 1.5 8 3.5 6 1.5 4.5 3h-2L.572 5.787A.5.5 0 0 0 .5 6zM2 9v6h12V9z"/></symbol>
+        <symbol id="streisand" viewBox="0 0 16 16"><path d="M12.67 5.302A.5.5 0 0 1 13 5.75v5.5a.5.5 0 0 1-.853.37L9.4 8.7H8.5c-.276 0-.5-.224-.5-.5s.224-.5.5-.5h.9l2.747-2.92a.5.5 0 0 1 .523-.078z"/><path d="M3.33 10.698a.5.5 0 0 1-.33-.748L6.6 7.3H7.5c.276 0 .5.224.5.5s-.224.5-.5.5H7.4l-2.747 2.92a.5.5 0 0 1-.523.078z"/><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14"/></symbol>
+        <symbol id="question-circle" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248.113.266.25l.487 3.167c.026.17-.113.298-.256.298h-.784c-.139 0-.251-.113-.269-.25l-.487-3.167a.75.75 0 0 1 1.48-.283l.11.233zM7 4h2v1H7z"/></symbol>
+        <symbol id="microsoft" viewBox="0 0 16 16"><path d="M6.71.555 0 4.391V11.21L6.71 15.445zM15.447 4.391 8.737.555v7.668l6.71 3.837zM6.71 15.445 15.447 11.21V4.391L6.71 8.228zM0 11.21l6.71 4.234V8.228L0 4.391z"/></symbol>
+        <symbol id="link-45deg" viewBox="0 0 16 16"><path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.83-1.83a3 3 0 0 0-.585-.585.5.5 0 0 1 .707-.707c.923.924 1.258 2.067.892 3.238L8.7 14.5a5 5 0 0 1-7.07 0 5 5 0 0 1 0-7.07l1.414-1.414a.5.5 0 0 1 .707.707zm3.125-1.765a3 3 0 1 0 4.243 4.243l1.83-1.83a3 3 0 0 0-.585-.585.5.5 0 0 1 .707-.707c.923.924 1.258 2.067.892 3.238L12.7 14.5a5 5 0 0 1-7.07 0 5 5 0 0 1 0-7.07l1.414-1.414a.5.5 0 0 1 .707.707z"/></symbol>
+        <symbol id="cloud-arrow-down" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M7.646 10.854a.5.5 0 0 0 .708 0l2-2a.5.5 0 0 0-.708-.708L8.5 9.293V5.5a.5.5 0 0 0-1 0v3.793L6.354 8.146a.5.5 0 1 0-.708.708z"/><path d="M4.406 3.646A5.5 5.5 0 0 0 3.5 6H.5a.5.5 0 0 0 0 1h.5v2a.5.5 0 0 0 1 0V7h2a.5.5 0 0 0 0-1h-.5a4.5 4.5 0 0 1 8.729-1.25.5.5 0 0 0 .003-.5A3.5 3.5 0 0 0 12.5 3a3.5 3.5 0 0 0-3.486 3.19.5.5 0 0 0 .1.353l.5 1.5a.5.5 0 0 0-.85.5h-1a.5.5 0 0 0-.85-.5l.5-1.5a.5.5 0 0 0 .1-.353A3.5 3.5 0 0 0 8.5 3.5h-4.094z"/></symbol>
+        <symbol id="github" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.73-.01-1.42-2.3 1.05-2.78-.96-2.78-.96-.47-1.21-1.14-1.54-1.14-1.54-.94-.65.07-.64.07-.64 1.04.07 1.59 1.07 1.59 1.07.93 1.57 2.59 1.11 3.23.85.09-.67.36-1.11.66-1.36-2.4-.27-4.9-1.2-4.9-5.35 0-1.18.42-2.14 1.12-2.89-.11-.27-.48-1.36.11-2.83 0 0 .91-.29 3.0.95.87-.24 1.83-.35 2.75-.35s1.88.11 2.75.35c2.09-1.24 3.0-1.24 3.0-1.24.59 1.47.22 2.56.11 2.83.7.75 1.12 1.71 1.12 2.89 0 4.16-2.5 5.09-4.91 5.35.39.34.74 1.04.74 2.09 0 1.51-.01 2.72-.01 3.09 0 .21.14.46.55.38C13.71 14.53 16 11.54 16 8c0-4.42-3.58-8-8-8"/></symbol>
+        <symbol id="plus-circle" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/></symbol>
+        <symbol id="google-play" viewBox="0 0 16 16"><path d="M11.667 6.13a1 1 0 0 0-.825-.56l-3.25-.975A1 1 0 0 0 6.667 5.16v5.68c0 .35.21.66.525.795l3.25.975a1 1 0 0 0 .825-.56l.917-3.24c.08-.28.08-.57 0-.85zM.516 7.234 4.5 9.6v-3.2zm4.843 4.288 3.25.975a1 1 0 0 0 .825-.56l1.25-4.437L8.98 5.405l-3.62 1.086zm1.758 1.487L3.454 10.37a1 1 0 0 1-.58-.887V6.517c0-.34.207-.65.524-.787L5.59 4.793 6.9 8.216zm10.74-5.358L10.985 2.112A1.1 1.1 0 0 0 10.05 1.62c-.175.053-.35.138-.5.253L.66 8.35c-.07.07-.11.16-.11.25v2.88c0 .26.15.485.392.59l4.58 2.37c.36.18.78.18 1.14 0l6.78-3.32a.5.5 0 0 0 .22-.44v-3.2z"/></symbol>
+        <symbol id="shop" viewBox="0 0 16 16"><path d="M2.97 1.35c.19 0 .375.02.555.066l8.846 2.653a1.5 1.5 0 0 1 1.115 1.077L15.996 11.399l-.004 1.171a.5.5 0 0 1-.5.5h-15a.5.5 0 0 1-.5-.5v-1.17L2.855 5.143a1.5 1.5 0 0 1 1.115-1.077l8.846-2.653c.18-.046.365-.066.555-.066zM2 13h12v-1H2z"/></symbol>
+        <symbol id="apple" viewBox="0 0 16 16"><path d="M12.984 8.225c.08.384.284.693.398 1.12.18.59.043 1.19-.23 1.777-.384.816-1.18 1.5-2.22 1.5-.78 0-1.42-.323-1.847-.323-.427 0-1.143.323-1.743.323-1.083 0-2.09-.76-2.67-1.78-.65-1.174-.69-2.73-.24-3.79.284-.658.835-1.22 1.463-1.638.628-.418 1.41-.69 2.148-.65.553.03 1.04.14 1.58.33.61.22 1.16.58 1.63 1.07.44.45.816.94 1.11 1.56.24.51.36 1.06.32 1.65m-2.83-6.42a.5.5 0 0 1 .5.5c0 .35-.12.64-.32.89-.25.32-.57.5-.96.53-.2.02-.45-.04-.66-.18-.21-.13-.37-.36-.46-.62-.11-.29-.11-.64.03-.96.11-.26.29-.48.51-.66.22-.18.47-.28.76-.32.32-.05.65-.04.96.03z"/></symbol>
+        <symbol id="lightning-charge" viewBox="0 0 16 16"><path d="M11.251.068a.5.5 0 0 1 .227.58L9.677 6.5H13a.5.5 0 0 1 .364.843l-8 8.5a.5.5 0 0 1-.842-.49L6.323 9.5H3a.5.5 0 0 1-.364-.843l8-8.5a.5.5 0 0 1 .503-.092z"/></symbol>
+        <symbol id="app-store" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M11 5.5V4h-1v1.5H8v1h2v-1h1.5zm-3 0h-1V4h-2v1.5H4v1h2v-1h1.5v1h-1.5v-1.5z"/></symbol>
+        <symbol id="info-circle" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M8.932 9.5a.5.5 0 0 0-1 0v1a.5.5 0 0 0 1 0zM8 4a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 1 0v-3A.5.5 0 0 0 8 4z"/></symbol>
+        <symbol id="telegram" viewBox="0 0 16 16"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M8 1.5A6.5 6.5 0 1 0 8 14.5a6.5 6.5 0 0 0 0-13M5.539 7.425 2.766 6.307a.286.286 0 0 0-.394.394l2.773 2.518a.3.3 0 0 0 .428-.016l3.868-3.868a.2.2 0 0 0 .046-.226l-.425-1.123a.1.1 0 0 0-.174-.01l-2.09 1.487a.2.2 0 0 1-.295-.084l-.795-2.043a.25.25 0 0 0-.472.036L4.36 9.177a.3.3 0 0 0 .15.394l7.152 2.65a.3.3 0 0 0 .394-.394L5.8 8.618a.3.3 0 0 0-.261-.193z"/></symbol>
+    </svg>
+</body>
+</html>

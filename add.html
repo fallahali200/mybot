@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <meta charset="UTF-8">
+  <title>ساخت کانفیگ نت ملی</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link href="https://cdn.fontcdn.ir/Font/Persian/BYekan.css" rel="stylesheet" type="text/css" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'BYekan', sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background-color: #f2f2f2;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #username {
+      background-color: white;  /* پس‌زمینه سفید */
+      color: #000;              /* متن مشکی خالص */
+      border: 1px solid #ccc;   /* مرز روشن */
+      padding: 10px;
+      height: 42px;
+      line-height: 20px;
+      font-weight: normal;
+      box-shadow: none;         /* حذف سایه داخلی */
+    }
+
+    #username::placeholder {
+      color: rgba(0,0,0,0.70); /* placeholder کمی روشن‌تر */
+    }
+
+    #username:disabled::placeholder {
+      color: rgba(0, 0, 0, 0.53); /* placeholder کمی کم‌رنگ‌تر از حالت عادی */
+    }   
+    #volume {
+      background-color: white;  /* پس‌زمینه سفید */
+      color: #000;              /* متن مشکی خالص */
+      border: 1px solid #ccc;   /* مرز روشن */
+      padding: 10px;
+      height: 42px;
+      line-height: 20px;
+      font-weight: normal;
+      box-shadow: none;         /* حذف سایه داخلی */
+    }
+
+
+    #volume::placeholder {
+      color: rgba(0,0,0,0.57); /* placeholder کمی روشن‌تر */
+    }
+
+    .container {
+      background: white;
+      padding: 25px 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+      width: 90%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    h2 {
+      margin-bottom: 20px;
+      font-size: 22px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0 15px 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+
+    #price {
+      margin-bottom: 10px;
+      font-size: 16px;
+      color: #333;
+    }
+
+    #messageBox {
+      color: red;
+      font-size: 15px;
+      margin-bottom: 10px;
+      min-height: 20px;
+    }
+
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    button:disabled {
+      background-color: #888;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>ساخت کانفیگ نت ملی</h2>
+    <div id="initialBalance" style="margin-bottom: 10px; font-weight: bold;">
+       موجودی شما: <span id="balanceAmount">{{ balance }}</span> تومان
+    </div>
+    <input type="text" id="username" placeholder="نام کاربری">
+    <select id="expire">
+     <option value=""> مدت زمان را انتخاب کنید</option>
+      <option value="30">یک ماه</option>
+      <!-- <option value="60">دو ماه</option>
+      <option value="90">سه ماه</option>
+      <option value="0">بدون تاریخ</option> -->
+    </select>
+    <input type="number" id="volume" placeholder="حجم (1 تا 10 گیگ)"  min="1" max="10">
+    <div id="price">قیمت: - تومان</div>
+    <div id="messageBox"></div>
+    <button id="createBtn">ساخت کانفیگ</button>
+  </div>
+
+  <script>
+
+    Telegram.WebApp.ready();
+
+    // درخواست برای نمایش تمام‌صفحه
+    Telegram.WebApp.expand();
+
+
+
+    function getQueryParam(param) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(param);
+    }
+  
+    const user_id = getQueryParam("user_id");
+    console.log("User ID from URL:", user_id);
+
+    const telegram_id = getQueryParam("telegram_id");
+    
+
+
+
+
+    document.addEventListener("DOMContentLoaded", function () {
+    // مقدار مستقیم از Flask، بدون fetch
+    const hasCapacity = JSON.parse('{{ has_capacity|tojson|safe }}');
+    
+    const button        = document.getElementById('createBtn');
+    const usernameInput = document.getElementById('username');
+    const volumeInput   = document.getElementById('volume');
+    const messageBox    = document.getElementById('messageBox');
+
+    if (!hasCapacity) {
+        button.innerText = 'تکمیل ظرفیت';
+        button.disabled  = true;
+        usernameInput.disabled = true;
+        volumeInput.disabled   = true;
+        expireSelect.disabled  = true;
+
+        messageBox.style.color = 'red';
+        messageBox.innerText   = 'ظرفیت تکمیل شده است.';
+    }
+});
+
+
+
+
+
+
+  
+
+
+
+  
+
+
+const usernameInput = document.getElementById('username');
+const volumeInput = document.getElementById('volume');
+const expireSelect = document.getElementById('expire');
+const messageBox = document.getElementById('messageBox');
+const priceDisplay = document.getElementById('price');
+const createBtn = document.getElementById('createBtn');
+volumeInput.disabled = true;
+expireSelect.disabled = true;
+createBtn.disabled = true;
+
+// فقط اجازه عدد وارد کردن در حجم
+volumeInput.addEventListener('keypress', function(e) {
+  const char = String.fromCharCode(e.which);
+  if (!/[0-9]/.test(char)) {
+    e.preventDefault();
+  }
+});
+
+function validateInputs() {
+  const username = usernameInput.value.trim();
+  const volumeStr = volumeInput.value.trim();
+  const volume = parseInt(volumeStr);
+  const expireValue = expireSelect.value;
+  let error = '';
+
+  if (!username) {
+    error = "نام کاربری نباید خالی باشد.";
+    createBtn.disabled = true;
+    expireSelect.disabled = true;
+    volumeInput.disabled = true;
+  } else if (/^\d+$/.test(username)) {
+    error = "نام کاربری نمی‌تواند فقط عدد باشد.";
+    createBtn.disabled = true;
+    expireSelect.disabled = true;
+    volumeInput.disabled = true; 
+  }else{
+    if(expireValue &&username){
+      volumeInput.disabled = false;
+    }
+    if(expireValue &&username &&volumeStr ){
+      volumeInput.disabled = false;
+      createBtn.disabled = false;
+    }
+     if(expireValue &&volumeStr){
+      volumeInput.disabled = false;
+      if (isNaN(volume) || volume < 1 || volume > 10) {
+        createBtn.disabled = true;
+        error = "حجم باید بین 1 تا 10 گیگ باشد.";
+        document.getElementById('price').innerText = 'قیمت: - تومان';
+
+      }
+
+     }
+    expireSelect.disabled = false;
+  }
+  messageBox.style.color = 'red';
+  messageBox.innerText = error;
+
+  // createBtn.disabled = !!error;
+
+  return !error;
+}
+
+
+function validateExpire() {
+  const expireValue = expireSelect.value;
+  let error = '';
+
+  if (!expireValue) {
+    error ="مدت زمان را انتخاب کنید.";
+    volumeInput.disabled = true;
+  }else {
+    // نام کاربری درست بود، اجازه بده expire انتخاب بشه
+    volumeInput.disabled = false;
+    
+  }
+
+  messageBox.style.color = 'red';
+  messageBox.innerText = error;
+
+  // createBtn.disabled = !!error;
+
+  return !error;
+}
+
+
+
+function validateInputvolume() {
+  const volumeStr = volumeInput.value.trim();
+  const volume = parseInt(volumeStr);
+  let error = '';
+
+  if (!volumeStr) {
+    error = "حجم مورد نظر را انتخاب کنید.";
+  } else if (isNaN(volume) || volume < 1 || volume > 10) {
+    error = "حجم باید بین 1 تا 10 گیگ باشد.";
+    document.getElementById('price').innerText = 'قیمت: - تومان';
+    
+  }
+
+  messageBox.style.color = 'red';
+  messageBox.innerText = error;
+
+  //createBtn.disabled = !!error;
+
+  return !error;
+}
+function updatePrice() {
+  const username = usernameInput.value.trim();
+  const volumeStr = volumeInput.value.trim();
+  const volume = parseInt(volumeStr);
+  const expireValue = expireSelect.value;
+
+
+  let errorMsg = '';
+
+  if (volumeStr && !username) {
+    errorMsg = "لطفاً ابتدا نام کاربری را وارد کنید.";
+  } else if (!username) {
+    errorMsg = "نام کاربری نباید خالی باشد.";
+  } else if (/^\d+$/.test(username)) {
+    errorMsg = "نام کاربری نمی تواند فقط عدد باشد.";
+ } else if (!expireValue) {
+    errorMsg = "مدت زمان را انتخاب کنید.";
+  }
+  else if (!volumeStr) {
+    errorMsg = "";
+    createBtn.disabled = true;
+    document.getElementById('price').innerText = 'قیمت: - تومان';
+    console.log(volumeStr);
+  } else if (isNaN(volume) || volume < 1 || volume > 10) {
+    errorMsg = "حجم باید بین 1 تا 10 گیگ باشد.";
+  }
+  
+
+   if (errorMsg) {
+    messageBox.style.color = 'red';
+    messageBox.innerText = errorMsg;
+    document.getElementById('price').innerText = 'قیمت: - تومان';
+    createBtn.disabled = true;
+    return;
+  }else if(volumeStr){
+
+  messageBox.innerText = '';
+  createBtn.disabled = false;
+
+  const expire = parseInt(expireValue);
+  const [unlimited_volume_config_price,volume_config_price]=JSON.parse('{{ price_tuple|tojson|safe }}');
+  const price = expire === 0 ? unlimited_volume_config_price : volume_config_price;
+  const price2 = parseInt(volume * price);
+  document.getElementById('price').innerText = `قیمت: ${price2.toLocaleString('en-US')}- تومان`;
+
+  }
+
+
+
+}
+
+
+
+usernameInput.addEventListener('input',validateInputs);
+
+
+let volumeTimeout;
+
+volumeInput.addEventListener('input', () => {
+
+
+    if (volumeTimeout) clearTimeout(volumeTimeout);
+
+    // محاسبه قیمت بعد از 900ms از آخرین ورودی
+    volumeTimeout = setTimeout(() => {
+        updatePrice();
+        validateInputs();
+        validateInputvolume();
+
+        
+    }, 450);
+});
+
+
+  expireSelect.addEventListener('change', () => {
+    const volumeStr = volumeInput.value.trim();
+    const volume = parseInt(volumeStr);
+    const expireValue = expireSelect.value;
+    validateExpire();
+    updatePrice();
+
+  });
+
+
+
+
+
+createBtn.addEventListener('click', async () => {
+  if (!validateInputs()) return;
+
+
+  const expireValue = expireSelect.value;
+  if (!expireValue) {
+    messageBox.style.color = 'red';
+    messageBox.innerText = "مدت زمان را انتخاب کنید.";
+    createBtn.disabled = true;
+    return;
+  }
+
+
+
+  const volumeStr = volumeInput.value.trim();
+  const volume = parseInt(volumeStr);
+  if (!volumeStr) {
+    messageBox.style.color = 'red';
+    messageBox.innerText = "حجم نباید خالی باشد.";
+    createBtn.disabled = true;
+    return;
+  }
+  if (isNaN(volume) || volume < 1 || volume > 10) {
+    messageBox.style.color = 'red';
+    messageBox.innerText = "حجم باید بین 1 تا 10 گیگ باشد.";
+    createBtn.disabled = true;
+    return;
+  }
+      createBtn.disabled = true;
+
+      const username = usernameInput.value.trim();
+      const expire = document.getElementById('expire').value;
+      messageBox.innerText = '';
+
+      const response = await fetch('/create_user', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ username, expire, volume, user_id,telegram_id })
+      });
+
+      const result = await response.json();
+
+      if (response.status === 403 && result.message === "موجودی کافی نیست") {
+        messageBox.style.color = 'red';
+        messageBox.innerText = "⚠️ موجودی شما کافی نیست.";
+        createBtn.innerText = 'عدم موجودی';
+        return;
+      } else {
+        // messageBox.style.color = 'green';                    //for success
+        // messageBox.innerText = result.message;
+        alert(result.message);
+        const bal = Number(result.balance);
+        if (typeof bal === 'number' && !isNaN(bal)) {
+          document.getElementById('balanceAmount').innerText = parseInt(bal).toLocaleString('en-US');
+        }
+        if (result.close_app) {
+          setTimeout(() => {
+            Telegram.WebApp.close();
+          }, 300);
+        }
+      }
+    });
+
+  </script>
+</body>
+</html>

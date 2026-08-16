@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>مدیریت هوشمند زیرساخت پنل</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --primary: #6366f1;
+            --accent: #a855f7;
+            --border: #334155;
+            --input-bg: #16213e;
+            --text: #f1f5f9;
+            --danger: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --info: #0ea5e9;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            padding: 15px;
+            line-height: 1.6;
+            font-size: 1.05rem;
+            direction: rtl;
+        }
+
+        @media (min-width: 768px) {
+            body { padding: 25px; }
+        }
+
+        .glass-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        @media (min-width: 768px) {
+            .glass-card { padding: 25px; }
+        }
+
+        .form-control, .form-select {
+            background-color: var(--input-bg) !important;
+            border: 1px solid var(--border) !important;
+            color: white !important;
+            border-radius: 8px;
+            padding: 10px 14px;
+        }
+
+        .node-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        @media (min-width: 768px) {
+            .node-item { padding: 20px; }
+        }
+
+        .status-off { 
+            background: rgba(255, 255, 255, 0.01) !important;
+            border-color: rgba(51, 65, 85, 0.4) !important;
+        }
+        
+        .status-off > .card-header-flex > :not(.node-controls), 
+        .status-off > .card-header-flex > .node-controls > .btn-group,
+        .status-off > .address-row, 
+        .status-off > .node-details-grid { 
+            opacity: 0.45; 
+            filter: grayscale(0.8); 
+        }
+
+        .node-master { border-right: 5px solid var(--primary); background: rgba(99, 102, 241, 0.05); }
+        .node-child { border-right: 5px solid var(--accent); background: rgba(168, 85, 247, 0.03); }
+        
+        @media (min-width: 576px) {
+            .node-child { margin-right: 25px; }
+        }
+
+        .node-same-as-master { 
+            border-right: 5px solid var(--danger) !important; 
+            background: rgba(239, 68, 68, 0.05) !important; 
+        }
+
+        .node-count-badge {
+            background: rgba(168, 85, 247, 0.2);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            white-space: nowrap;
+        }
+
+        .address-row {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 15px;
+            width: 100%;
+        }
+
+        .address-display, .sub-display {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            overflow: hidden;
+        }
+
+        @media (min-width: 576px) {
+            .address-display, .sub-display {
+                flex-direction: row;
+                align-items: center;
+                gap: 10px;
+            }
+        }
+
+        .address-display small, .sub-display small {
+            color: #94a3b8;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            padding-left: 0;
+            border-left: none;
+        }
+
+        @media (min-width: 576px) {
+            .address-display small, .sub-display small {
+                border-left: 1px solid var(--border);
+                padding-left: 10px;
+            }
+        }
+
+        .address-display code, .sub-display code {
+            font-size: 0.85rem !important;
+            white-space: nowrap;
+            overflow-x: auto;
+            display: block;
+            flex: 1;
+            color: #6366f1;
+            width: 100%;
+        }
+
+        .address-display code::-webkit-scrollbar, .sub-display code::-webkit-scrollbar {
+            height: 3px;
+        }
+        .address-display code::-webkit-scrollbar-thumb, .sub-display code::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 10px;
+        }
+
+        .node-details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border);
+            font-size: 0.9rem;
+        }
+
+        .password-toggle {
+            cursor: pointer;
+            background: rgba(0,0,0,0.2);
+            padding: 2px 8px;
+            border-radius: 5px;
+            font-family: monospace;
+            word-break: break-all;
+            display: inline-block;
+        }
+
+        .children-container {
+            display: none;
+            margin-top: 20px;
+            border-top: 2px dashed var(--border);
+            padding-top: 20px;
+        }
+
+        .inbound-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .btn-add-inbound, .btn-remove-inbound {
+            border: none;
+            border-radius: 5px;
+            padding: 2px 10px;
+            font-weight: bold;
+            min-width: 35px;
+            height: 38px;
+        }
+        .btn-add-inbound { background-color: var(--warning); color: black; }
+        .btn-remove-inbound { background-color: transparent; color: var(--danger); border: 1px solid var(--danger); }
+
+        .form-switch { padding-right: 3.5em !important; padding-left: 0 !important; }
+        .form-check-input {
+            cursor: pointer;
+            width: 3em !important;
+            height: 1.5em !important;
+            float: right !important;
+            margin-right: -3.5em !important;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba%28255, 255, 255, 1%29'/%3e%3c/svg%3e") !important;
+            background-position: left center !important; 
+            background-repeat: no-repeat !important;
+            background-color: #334155;
+            border: 1px solid var(--border) !important;
+            transition: background-position 0.2s ease-in-out, background-color 0.2s ease-in-out !important;
+        }
+        .form-check-input:checked {
+            background-color: var(--success) !important;
+            border-color: var(--success) !important;
+            background-position: right center !important; 
+        }
+
+        .sticky-sidebar { position: static; }
+        @media (min-width: 992px) {
+            .sticky-sidebar { position: sticky; top: 20px; }
+        }
+
+        label { margin-bottom: 8px; color: #94a3b8; font-size: 0.9rem; font-weight: bold; }
+        
+        .pagination-container {
+            margin-top: 30px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .card-header-flex {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: flex-start;
+            gap: 12px;
+            width: 100%;
+        }
+
+        @media (min-width: 576px) {
+            .card-header-flex {
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+            }
+        }
+
+        .node-controls {
+            display: flex;
+            align-items: center;
+            justify-content: justify-content;
+            gap: 12px;
+            width: 100%;
+        }
+
+        @media (min-width: 576px) {
+            .node-controls {
+                width: auto;
+                justify-content: flex-end;
+            }
+        }
+
+        .notification-toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            padding: 12px 30px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            display: none;
+            animation: fadeInDown 0.3s ease;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translate(-50%, -20px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="system-notification" class="notification-toast"></div>
+
+<div class="container-fluid">
+    <div class="row g-4">
+        
+        <div class="col-lg-8 order-2 order-lg-1">
+            <div class="glass-card">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4 class="mb-0 fs-5 fs-md-4"><i class="fas fa-network-wired me-2 text-primary"></i> مدیریت زیرساخت</h4>
+                    <span class="badge bg-primary fs-6">{{ panels|length }} مستر پنل</span>
+                </div>
+
+                <div id="master-list-wrapper">
+                    {% macro render_node(node, is_master=False, master_address='') %}
+                    {% set is_local = not is_master and node.panel_address == master_address %}
+                    <div id="node-card-{{ node.id }}" class="node-item {{ 'node-master' if is_master else 'node-child' }} {{ 'node-same-as-master' if is_local }} {{ 'status-off' if node.status == 0 }}">
+                        
+                        <div class="card-header-flex">
+                            <div style="min-width: 0; width: 100%;">
+                                <h5 class="mb-0 d-flex align-items-center flex-wrap gap-2" style="min-width: 0;">
+                                    {% if is_master %}
+                                        <span class="fw-bold text-white text-truncate" style="max-width: 160px;"><i class="fas fa-crown text-warning me-1"></i> {{ node.name }}</span>
+                                        <span class="badge bg-dark text-info" style="font-size: 0.75rem;">{{ node.panel_type|upper }}</span>
+                                        
+                                        {% if node.children %}
+                                            {% set same_count = [] %}
+                                            {% set diff_count = [] %}
+                                            {% for child in node.children %}
+                                                {% if child.panel_address == node.panel_address %}
+                                                    {% set _ = same_count.append(1) %}
+                                                {% else %}
+                                                    {% set _ = diff_count.append(1) %}
+                                                {% endif %}
+                                            {% endfor %}
+
+                                            {% if diff_count|length > 0 %}
+                                            <span class="node-count-badge">
+                                                <i class="fas fa-server me-1"></i> {{ diff_count|length }} نود
+                                            </span>
+                                            {% endif %}
+
+                                            {% if same_count|length > 0 %}
+                                            <span class="node-count-badge" style="color: var(--danger); border-color: var(--danger); background: rgba(239, 68, 68, 0.1);">
+                                                <i class="fas fa-link-slash me-1"></i> {{ same_count|length }} نود 
+                                            </span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="node-count-badge" style="opacity: 0.6; border-style: dashed;">
+                                                <i class="fas fa-ghost me-1"></i> بدون نود
+                                            </span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="fw-bold text-white text-truncate" style="max-width: 220px;"><i class="fas fa-link {{ 'text-danger' if is_local else 'text-accent' }} me-1"></i> {{ node.name }}</span>
+                                    {% endif %}
+                                </h5>
+                            </div>
+
+                            <div class="node-controls">
+                                <div class="btn-group gap-1">
+                                    {% if is_master %}
+                                        {% if node.children %}
+                                        <button onclick="toggleChildren('{{ node.id }}', this)" class="btn btn-outline-info btn-sm px-2"><i class="fas fa-list-ul"></i></button>
+                                        {% endif %}
+                                        <a href="/master_edit/{{ node.id }}" class="btn btn-outline-warning btn-sm px-2"><i class="fas fa-edit"></i></a>
+                                        <button onclick="deleteMaster('{{ node.id }}')" class="btn btn-outline-danger btn-sm px-2"><i class="fas fa-trash"></i></button>
+                                    {% else %}
+                                        {% if is_local %}
+                                        {% set edit_url = '/node_master_edit/' ~ node.id %}
+                                        {% else %}
+                                            {% set edit_url = '/node_edit/' ~ node.id %}
+                                        {% endif %}
+                                        <a href="{{ edit_url }}" class="btn btn-outline-warning btn-sm px-2"><i class="fas fa-edit"></i></a>
+                                        <button onclick="deleteNode('{{ node.id }}')" class="btn btn-outline-danger btn-sm px-2"><i class="fas fa-trash"></i></button>
+                                    {% endif %}
+                                </div>
+
+                                <div class="form-switch ms-auto ms-sm-0">
+                                    <input class="form-check-input" type="checkbox" role="switch" 
+                                           onclick="toggleNodeStatus('{{ node.id }}', '{{ 'master' if is_master else 'node' }}')"
+                                           {{ 'checked' if node.status == 1 }}>
+                                </div>
+                            </div>
+                        </div>
+
+                        {# --- بخش آدرس ها --- #}
+                        {% if not is_local %}
+                        <div class="address-row">
+                            <div class="address-display"><small>پنل</small><code dir="ltr">{{ node.panel_address }}</code></div>
+                            <div class="sub-display"><small>ساب</small><code dir="ltr">{{ node.subscription_link or '---' }}</code></div>
+                        </div>
+                        {% endif %}
+
+                        <div class="node-details-grid">
+                            {% if not is_local %}
+                            <div>
+                                <i class="fas fa-shield-alt me-1 text-warning"></i> توکن: 
+                                <span class="password-toggle" onclick="togglePasswordVisibility(this)">••••••</span>
+                                <span class="d-none actual-pass">{{ node.token or 'بدون توکن' }}</span>
+                            </div>
+                            {% endif %}
+
+                            {% if is_master %}
+                            <div><i class="fas fa-database me-1 text-success"></i> ظرفیت: <b>{{ node.capacity }}</b></div>
+                            {% else %}
+                            <div><i class="fas fa-percentage me-1 text-warning"></i> ضریب: <span class="badge bg-warning text-dark">{{ node.multiplier }}</span></div>
+                            {% endif %}
+                            
+                            <div><i class="fas fa-fingerprint me-1 text-info"></i> اینباند: <span class="text-light">{{ node.get_inbound or '-' }}</span></div>
+                        </div>
+
+                        {% if node.children %}
+                        <div id="children-{{ node.id }}" class="children-container">
+                            {% for child in node.children %}
+                                {{ render_node(child, False, node.panel_address) }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endmacro %}
+
+                    {% for panel in panels %}
+                        <div class="master-wrapper-item" style="display: none;">
+                            {{ render_node(panel, True, panel.panel_address) }}
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <div id="pagination-controls" class="pagination-container">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="changePage(-1)" id="prevBtn">قبلی</button>
+                    <span id="page-info" class="fw-bold px-2" style="font-size:0.9rem;"></span>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="changePage(1)" id="nextBtn">بعدی</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4 order-1 order-lg-2">
+            <div class="glass-card sticky-sidebar">
+                <h5 class="mb-4 text-accent"><i class="fas fa-plus-circle me-1"></i> ثبت سرور مستر جدید</h5>
+                <form onsubmit="handleFormSubmit(event, '/add_master')">
+                    <div class="row g-3">
+                        <div class="col-12"><label>نام مستر</label><input type="text" name="name" class="form-control" required></div>
+                        <div class="col-12">
+                            <label>نوع وضعیت حجم</label>
+                            <select name="volume_type" class="form-select" required>
+                                <option value="" selected disabled hidden>لطفاً نوع پنل را انتخاب کنید</option>
+                                <option value="unlimited">نامحدود</option>
+                                <option value="volume_based">حجمی</option>
+                                <option value="national">نت ملی</option>
+                            </select>
+                        </div>
+                        <div class="col-12"><label>URL کامل</label><input type="url" name="panel_address" class="form-control" required dir="ltr"></div>
+                        <div class="col-12"><label>توکن اتصال (Token)</label><input type="text" name="token" class="form-control" required dir="ltr" placeholder="توکن امنیتی پنل را وارد کنید"></div>
+                        
+                        <div class="col-12">
+                            <label>Inbound ID (امکان ثبت چندتایی)</label>
+                            <div id="master-inbound-list">
+                                <div class="inbound-wrapper">
+                                    <input type="text" name="inbounds[]" class="form-control" placeholder="ID عددی اینباند" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')" required>
+                                    <button type="button" class="btn-add-inbound" onclick="addNewInboundField('master-inbound-list')">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12"><label>ظرفیت کل پنل  </label><input type="text" name="capacity" class="form-control" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')" required></div>
+                        <div class="col-12"><label>لینک سابسکریپشن</label><input type="url" name="sub_link" class="form-control" dir="ltr" required></div>
+                        <div class="col-12 mt-4"><button type="submit" class="btn btn-primary btn-lg w-100 fw-bold">ایجاد مستر</button></div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+    Telegram.WebApp.ready();
+
+    // درخواست برای نمایش تمام‌صفحه
+    Telegram.WebApp.expand();
+
+    function showNotification(message, type = 'success') {
+        const notif = document.getElementById('system-notification');
+        notif.innerText = message;
+        notif.style.backgroundColor = type === 'success' ? 'var(--success)' : 'var(--danger)';
+        notif.style.display = 'block';
+        
+        setTimeout(() => {
+            notif.style.display = 'none';
+        }, 3000);
+    }
+
+    function addNewInboundField(containerId) {
+        const container = document.getElementById(containerId);
+        const div = document.createElement('div');
+        div.className = 'inbound-wrapper';
+        div.innerHTML = `
+            <input type="text" name="inbounds[]" class="form-control" placeholder="ID عددی" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')" required>
+            <button type="button" class="btn-remove-inbound" onclick="this.parentElement.remove()">-</button>
+        `;
+        container.appendChild(div);
+    }
+
+    function toggleChildren(id, btn) {
+        const div = document.getElementById('children-' + id);
+        const icon = btn.querySelector('i');
+        if (div.style.display === 'none' || div.style.display === '') {
+            div.style.display = 'block';
+            icon.className = 'fas fa-eye-slash';
+        } else {
+            div.style.display = 'none';
+            icon.className = 'fas fa-list-ul';
+        }
+    }
+
+    async function toggleNodeStatus(id, nodeType = 'node') {
+        const card = document.getElementById(`node-card-${id}`);
+
+        try {
+            const res = await fetch(`/toggle_status_panel/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ node_type: nodeType })
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.status === "toggled") {
+                card.classList.toggle('status-off');
+                showNotification(data.message || 'وضعیت با موفقیت تغییر کرد', 'success');
+            } else {
+                showNotification('خطا در تغییر وضعیت', 'danger');
+            }
+
+        } catch (e) {
+            showNotification('ارتباط با سرور برقرار نشد', 'danger');
+        }
+    }
+
+    function togglePasswordVisibility(element) {
+        const secretSpan = element.nextElementSibling;
+        if (element.innerText === '••••••') {
+            element.innerText = secretSpan.innerText;
+            element.style.color = '#10b981';
+        } else {
+            element.innerText = '••••••';
+            element.style.color = 'inherit';
+        }
+    }
+
+    async function handleFormSubmit(event, url, parentId = null) {
+        event.preventDefault();
+        
+        const formInputs = event.target.querySelectorAll('input, select');
+        for (let input of formInputs) {
+            if (input.hasAttribute('required') && !input.value.trim()) {
+                showNotification('لطفاً تمامی فیلدهای الزامی را پر کنید!', 'danger');
+                return;
+            }
+        }
+
+        const formData = new FormData(event.target);
+        const payload = {};
+        
+        // ---------------------------------------------------------
+        // بخش بررسی مقادیر تکراری اینباندها قبل از ثبت فرم
+        // ---------------------------------------------------------
+        const inboundInputs = Array.from(event.target.querySelectorAll('input[name="inbounds[]"]'));
+        const inboundValues = inboundInputs.map(input => input.value.trim()).filter(val => val !== '');
+        
+        const uniqueInbounds = new Set(inboundValues);
+        if (uniqueInbounds.size !== inboundValues.length) {
+            showNotification('خطا: شما مقادیر Inbound ID تکراری وارد کرده‌اید!', 'danger');
+            return;
+        }
+        // ---------------------------------------------------------
+
+        formData.forEach((val, key) => {
+            if (key === 'inbounds[]') {
+                if (!payload.inbounds) payload.inbounds = [];
+                if(val.trim()) payload.inbounds.push(val);
+            } else payload[key] = val;
+        });
+        if(parentId) payload.parent_id = parentId;
+        try {
+            const res = await fetch(url, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(payload) 
+            });
+            const responseData = await res.json();
+            
+            if (res.ok) {
+                showNotification(responseData.message || 'عملیات با موفقیت انجام شد', 'success');
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                showNotification(responseData.message || 'خطا در ثبت اطلاعات', 'danger');
+            }
+        } catch (e) { 
+            showNotification('خطای سیستمی در برقراری ارتباط', 'danger'); 
+        }
+    }
+
+    let currentPage = 1;
+    const itemsPerPage = 5;
+    const masterItems = document.querySelectorAll('.master-wrapper-item');
+    const totalPages = Math.ceil(masterItems.length / itemsPerPage);
+
+    function showPage(p) {
+        if (totalPages <= 1) document.getElementById('pagination-controls').style.display = 'none';
+        if (p < 1 || (totalPages > 0 && p > totalPages)) return;
+        currentPage = p;
+        masterItems.forEach((item, index) => {
+            item.style.display = (index >= (p-1)*itemsPerPage && index < p*itemsPerPage) ? 'block' : 'none';
+        });
+        document.getElementById('page-info').innerText = `صفحه ${currentPage} از ${totalPages || 1}`;
+        document.getElementById('prevBtn').disabled = (currentPage === 1);
+        document.getElementById('nextBtn').disabled = (currentPage === totalPages || totalPages === 0);
+    }
+
+    function changePage(step) {
+        showPage(currentPage + step);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function deleteMaster(id) {
+        if (confirm('حذف کامل مستر؟')) {
+            try {
+                const res = await fetch(`/delete_master/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    showNotification(data.message || "مستر با موفقیت حذف شد", 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showNotification(data.message || "خطا در حذف", 'danger');
+                }
+            } catch (e) {
+                showNotification("ارتباط برقرار نشد", 'danger');
+            }
+        }
+    }
+
+    async function deleteNode(id) {
+        if (confirm('حذف این نود؟')) {
+            try {
+                const res = await fetch(`/delete_node/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    showNotification(data.message || "نود با موفقیت حذف شد", 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showNotification(data.message || "خطا در حذف", 'danger');
+                }
+            } catch (e) {
+                showNotification("ارتباط برقرار نشد", 'danger');
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => showPage(1));
+</script>
+
+</body>
+</html>

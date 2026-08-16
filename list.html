@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <meta charset="UTF-8" />
+  <title>لیست سرویس‌ها</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <style>
+    body {
+      font-family: 'BYekan', sans-serif;
+      background-color: #f2f2f2;
+      margin: 0;
+      padding: 20px;
+    }
+    h2 {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    #balanceDisplay {
+      font-weight: bold;
+      margin-bottom: 20px;
+      font-size: 18px;
+      text-align: center;
+    }
+    #statusMessage {
+      text-align: center;
+      margin-bottom: 15px;
+      color: green;
+      font-weight: bold;
+      display: none;
+    }
+    #searchInput {
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto 20px auto;
+      display: block;
+      padding: 10px 15px;
+      font-size: 16px;
+      border: 1.5px solid #ccc;
+      border-radius: 8px;
+      box-sizing: border-box;
+      transition: border-color 0.3s;
+    }
+    #searchInput:focus {
+      outline: none;
+      border-color: #2196F3;
+    }
+    .service-card {
+      background-color: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 15px;
+      margin-bottom: 15px;
+      transition: 0.3s;
+    }
+    .service-card.inactive {
+      opacity: 0.5;
+    }
+    .service-title {
+      font-size: 18px;
+      margin-bottom: 8px;
+      font-weight: bold;
+      word-break: break-word;
+      text-align: right; /* اضافه کن */
+    }
+
+    .service-info {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 12px;
+    }
+    .buttons {
+      display: flex;
+      justify-content: flex-start; /* به جای space-between */
+      align-items: center;
+      gap: 10px;
+    }
+    .buttons .left-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    .buttons button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn-renew {
+      background-color: #4CAF50;
+      color: white;
+    }
+    .btn-delete {
+      background-color: #f44336;
+      color: white;
+    }
+    .btn-view {
+      background-color: #2196F3;
+      color: white;
+    }
+    #pagination {
+      text-align: center;
+      margin-top: 20px;
+    }
+    #pagination button {
+      margin: 0 5px;
+      padding: 6px 12px;
+      border: 1px solid #ccc;
+      background-color: white;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    #pagination button.active {
+      background-color: #2196F3;
+      color: white;
+      border-color: #2196F3;
+    }
+    #pagination button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+      #messageBox {
+      color: red;
+      font-size: 15px;
+      margin-bottom: 10px;
+      min-height: 20px;
+    }
+
+    .btn-status {
+     padding: 6px 12px;
+     border: none;
+     border-radius: 6px;
+     font-size: 14px;
+     cursor: pointer;
+     color: white;
+     min-width: 90px;
+     text-align: center;
+   }
+   .btn-status.active {
+     background-color: #4CAF50; /* سبز */
+   }
+   .btn-status.inactive {
+     background-color: #f44336; /* قرمز */
+   }
+
+
+    .service-card {
+      position: relative; /* این رو حتما بذار */
+    }
+
+    .status-toggle {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      direction: ltr; /* برای درست شدن موقعیت سوییچ در RTL */
+      z-index: 10;
+    }
+
+
+.disabled-config {
+opacity: 0.5;       /* کم‌رنگ کردن کل کارت */
+}
+
+
+
+
+.service-card.disabled {
+  opacity: 0.5;
+
+}
+
+
+
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 42px;
+    height: 24px;
+  }
+
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.4s;
+    border-radius: 24px;
+  }
+
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
+  }
+
+  input:checked + .slider {
+    background-color: #4CAF50;
+  }
+
+  input:checked + .slider:before {
+    transform: translateX(18px);
+  }
+
+  </style>
+</head>
+<body>
+
+  <h2>لیست سرویس‌ ها</h2>
+  <div id="balanceDisplay">موجودی شما: {{ balance }} تومان</div>
+  <div id="serviceCounts" style="text-align:center; margin-bottom: 20px; font-size: 17px; font-weight: bold;">
+    <!-- محتوا توسط جاوااسکریپت تنظیم می‌شود -->
+  </div>  
+  <div id="messageBox"></div>
+  <div id="statusMessage"></div>
+
+  <input
+    type="text"
+    id="searchInput"
+    placeholder="جستجو براساس نام کانفیگ،نام کاربری،نوع کانفیگ"
+    autocomplete="off"
+  />
+
+    <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 20px;">
+      <!-- دکمه سمت چپ (قرمز - در حال انقضا) -->
+      <button id="toggleExpiringBtn" style="
+        padding: 8px 20px;
+        font-size: 15px;
+        background-color: #f44336;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+      ">نمایش سرویس‌های در حال انقضا</button>
+    
+      <!-- دکمه سمت راست (سبز - غیرفعال) -->
+      <button id="toggleInactiveBtn" style="
+        padding: 8px 20px;
+        font-size: 15px;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+      ">نمایش فقط سرویس‌های غیرفعال</button>
+    </div>
+  
+
+  <div id="servicesContainer">در حال بارگذاری سرویس‌ها...</div>
+  <div id="pagination"></div>
+
+  <script>
+
+    Telegram.WebApp.ready();
+
+    // درخواست برای نمایش تمام‌صفحه
+    Telegram.WebApp.expand();
+
+    function getQueryParam(param) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(param);
+    }
+
+    const user_id = getQueryParam("user_id");
+    console.log("User ID from URL:", user_id);
+    const telegram_id = getQueryParam("telegram_id");
+
+    function bytesToGB(bytes) {
+      return (bytes / (1024 ** 3)).toFixed(2);
+    }
+
+  function calculateExpireTime(expiryTimestamp) {
+    if (!expiryTimestamp || isNaN(expiryTimestamp)) {
+      return { days: 29, hours: 0 };
+    }
+
+    const absExpiry = Math.abs(expiryTimestamp);
+    const diff = absExpiry - Date.now();
+
+    if (diff <= 0) {
+      return { days: 0, hours: 0 };
+    }
+
+    const oneHourMs = 1000 * 60 * 60;
+    const totalHours = Math.floor(diff / oneHourMs);
+
+    const days = Math.floor(totalHours / 24); // اصلاح شد
+    const hours = totalHours % 24;
+
+    return { days, hours };
+  }
+
+
+
+
+
+
+
+    const ITEMS_PER_PAGE = 10;
+    let currentPage = 1;
+    let servicesData = [];
+    let filteredData = [];
+
+    function showStatusMessage(message, isError = false) {
+      const msgDiv = document.getElementById('statusMessage');
+      msgDiv.innerText = message;
+      msgDiv.style.color = isError ? 'red' : 'green';
+      msgDiv.style.display = 'block';
+
+      setTimeout(() => {
+        msgDiv.style.display = 'none';
+      }, 3000);
+    }
+
+    async function loadServices(userId, useServer = false) {
+  try {
+    const savedPage = currentPage || 1;
+    let data;
+
+    if (useServer) {
+      // 🔹 fetch واقعی از سرور بعد از تغییر وضعیت
+      const response = await fetch(`/list_users?user_id=${userId}`);
+      data = await response.json();
+    } else {
+      // 🔹 استفاده از داده‌های اولیه تزریق شده توسط Jinja2
+      data = JSON.parse('{{ clients|tojson|safe }}');
+      // console.log('Initial data:', data);
+    }
+
+    const clients = Array.isArray(data.clients) ? data.clients : [];
+    servicesData = clients;
+    filteredData = servicesData;
+
+    currentPage = savedPage;
+    renderPage(currentPage);
+    renderPagination();
+
+    // محاسبه تعداد سرویس فعال و غیرفعال
+    inactiveCount = servicesData.filter(service => {
+      console.log(bytesToGB(16106127360))
+      console.log(service)
+  const { days, hours } = calculateExpireTime(service.mytime);
+
+  const isExpired = days === 0 ? hours <= 0 : days <= 0;
+
+  return (
+    service.config_status === 0 ||
+    (service.is_unlimited == 0 && (service.up + service.down) >= service.total) ||
+    (service.is_unlimited == 1 &&
+      (0 < service.total && bytesToGB(service.total) <= 100) &&
+      (service.up + service.down) >= service.total) ||
+    isExpired
+  );
+}).length;
+
+
+
+
+    const activeCount = clients.length - inactiveCount;
+
+    document.getElementById('serviceCounts').innerHTML = `
+      <span style="color: green;">سرویس فعال: ${activeCount.toLocaleString()}</span>
+      &nbsp;&nbsp;&nbsp;
+      <span style="color: red;">سرویس غیرفعال: ${inactiveCount.toLocaleString()}</span>
+    `;
+
+
+
+  } catch (error) {
+    console.error('خطا در بارگذاری سرویس‌ها:', error);
+    document.getElementById('servicesContainer').innerText = 'شما سرویسی ندارید.';
+    document.getElementById('pagination').innerHTML = '';
+  }
+}
+
+
+
+
+
+function renderServices(services) {
+  const container = document.getElementById('servicesContainer');
+  container.innerHTML = '';
+    
+  if (services.length === 0) {
+    container.innerText = 'سرویسی یافت نشد.';
+    return;
+  }
+
+  services.forEach(service => {
+  const usedBytes = service.up + service.down;
+  const usedGB = bytesToGB(usedBytes);
+  const totalGB = (service.is_unlimited == 1 &&(service.total == 0 || bytesToGB(service.total) >100))? 'نامحدود'
+    : `${bytesToGB(service.total)}GB`;
+  const totalGBNumber=bytesToGB(service.total);
+  const remainingGB =service.is_unlimited == 1  &&(service.total == 0 || bytesToGB(service.total) > 100)     ?  `حجم مصرف شده: ${usedGB}GB`: (Number(usedGB) >= Number(totalGBNumber)? 'حجم باقی‌مانده:منقضی': `حجم باقی‌مانده: ${(bytesToGB(service.total) - usedGB).toFixed(2)}GB`);
+
+  const { days, hours } = calculateExpireTime(service.mytime);
+  const expireDays = days === 0 ? hours : days;
+  const expireText =
+  service.mytime === 0
+    ? 'بدون تاریخ'
+    : (() => {
+        const { days, hours } = calculateExpireTime(service.mytime);
+
+        if (days === 0 && hours === 0) return 'منقضی شده';
+        if (hours === 0) return `${days} روز مانده`;
+        if (days === 0) return `${hours} ساعت مانده`;
+
+        return `${days} روز و ${hours} ساعت مانده`;
+      })();
+
+  const showRenew = true;
+
+  const card = document.createElement('div');
+  card.className = 'service-card';
+  if (expireDays <= 0) card.classList.add('inactive');
+
+
+
+
+  const isExpired = expireDays <= 0;
+  const isUsedUp = 
+  service.is_unlimited == 1 
+    ? (service.total > 0 && bytesToGB(service.total) <= 100 && Number(usedGB) >= Number(totalGBNumber))  // نامحدود با حجم بین 0 و 100GB و تمام شده
+    : (Number(usedGB) >= Number(totalGBNumber)); // محدود و تمام شده
+  const isConfigDisabled = service.config_status === 0;
+  if (isConfigDisabled) card.classList.add('disabled');
+
+  const isSwitchChecked = !isExpired && !isUsedUp && !isConfigDisabled;
+  const isSwitchDisabled = isExpired || isUsedUp;
+  if (isSwitchDisabled) card.classList.add('disabled');
+  // console.log('service.id:', service.id);
+  // console.log('isExpired:', isExpired);
+   console.log('isUsedUp:', isUsedUp);
+  // console.log('config_status:', service.config_status);
+  // console.log('isSwitchChecked:', isSwitchChecked);
+  // console.log('isSwitchDisabled:', isSwitchDisabled);
+  // console.log(service.is_unlimited,service.total);
+// 👇 این بخش جدید رو اضافه کن
+  if (service.is_unlimited==1 &&(service.total == 0 || bytesToGB(service.total) > 100)) {
+    card.style.border = "1px solid black";
+    card.style.borderRadius = "10px";
+  }
+
+container.appendChild(card); // همون خط قبلی
+
+card.id = `service-${service.subId}`; // 👈 الان کارت id داره
+  card.innerHTML = `
+  
+    <div style="direction: rtl; display: flex; align-items: center; justify-content: space-between;">
+    
+      <div class="status-toggle" style="direction: ltr;">
+      <label class="switch" style="margin: 0; ${isConfigDisabled ? 'opacity: 1;' : ''}">
+      <input type="checkbox"
+        ${isSwitchChecked ? 'checked' : ''}
+        ${isSwitchDisabled ? 'disabled' : ''}
+        onchange="${!isSwitchDisabled ? `toggleStatus('${service.subId}', this.checked)` : ''}">
+
+        <span class="slider"></span>
+      </label>
+
+
+      <span style="font-size: 14px; color: #333; font-weight: 500;">
+      ${
+        service.is_unlimited == 1 && (0 < service.total && bytesToGB(service.total) <= 100)
+          ? 'حجمی'
+          : service.limitip == 1 && (service.total == 0 || bytesToGB(service.total) > 100)
+          ? 'نامحدود تک کاربر'
+          : service.limitip == 2 && (service.total == 0 || bytesToGB(service.total) > 100)
+          ? 'نامحدود دو کاربر'
+          : 'نت ملی'
+      }
+      </span>
+
+
+
+
+
+      </div>
+      
+      <div style="flex-grow: 1; text-align: right; margin-right: 0;">
+        <div class="service-title" style="padding-right: 0;">${service.comment ? service.comment : 'بدون نظر'}</div>
+      </div>
+      
+    </div>
+
+    <div class="service-info">حجم کل: ${totalGB}</div>
+    <div class="service-info"> ${remainingGB}</div>
+    <div class="service-info">انقضا: ${expireText}</div>
+
+    <div class="service-info" style="color: #000; font-weight: bold; font-size: 16px;">
+    نام کانفیگ:
+    <span style="color: #00bcd4;">${service.server_name}</span>${service.email}
+    </div>
+    
+    <div class="buttons">
+     <button class="btn-view" onclick="viewService('${service.subId}')">نمایش</button>
+     ${showRenew ? `<button class="btn-renew" onclick="renewService('${service.subId}')">تمدید</button>` : ''}
+      <button class="btn-delete" onclick="deleteService('${service.subId}')">حذف</button>
+    </div>
+
+  `;
+
+  container.appendChild(card);
+});
+}
+
+    function renderPage(page) {
+      const start = (page - 1) * ITEMS_PER_PAGE;
+      const end = start + ITEMS_PER_PAGE;
+      const pageItems = filteredData.slice(start, end);
+      renderServices(pageItems);
+    }
+
+    function renderPagination() {
+      const pagination = document.getElementById('pagination');
+      const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
+
+      if (totalPages <= 1) {
+        pagination.innerHTML = '';
+        return;
+      }
+
+      let buttonsHTML = '';
+
+      buttonsHTML += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">قبلی</button>`;
+
+      for (let i = 1; i <= totalPages; i++) {
+        buttonsHTML += `<button class="${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+      }
+
+      buttonsHTML += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">بعدی</button>`;
+
+      pagination.innerHTML = buttonsHTML;
+    }
+
+    function changePage(page) {
+      if (page < 1 || page > Math.ceil(filteredData.length / ITEMS_PER_PAGE)) return;
+      currentPage = page;
+      renderPage(page);
+      renderPagination();
+      window.scrollTo({top: 0, behavior: 'smooth'});
+    }
+
+    async function renewService(subId) {
+  const selectedService = servicesData.find(
+    service => String(service.subId) === String(subId)
+  );
+
+  if (!selectedService) {
+    console.error("سرویس موردنظر پیدا نشد:", subId);
+    return;
+  }
+
+  // محاسبه حجم‌ها فقط در JS
+
+
+  // ذخیره فقط در مرورگر (هیچ چیز به سرور فرستاده نمی‌شود)
+  sessionStorage.setItem('selectedService', JSON.stringify(selectedService));
+  sessionStorage.setItem('user_id', user_id);
+  sessionStorage.setItem('telegram_id', telegram_id);
+  const { days } = calculateExpireTime(selectedService.mytime);
+sessionStorage.setItem('ExpireDays', days);
+
+  // هدایت بدون ارسال حجم‌ها
+  if (selectedService.is_unlimited == 1 &&(selectedService.total == 0 || bytesToGB(selectedService.total) > 100)){
+    const total = selectedService.total;
+    const used =  (selectedService.up + selectedService.down);
+    sessionStorage.setItem('total_volume', bytesToGB(total));
+    sessionStorage.setItem('used', bytesToGB(used));
+    sessionStorage.setItem('limitip', selectedService.limitip);
+    window.location.href = `/update_unlimited.html?user_id=${encodeURIComponent(user_id)}`;
+
+  } else if (selectedService.is_unlimited == 1 && (0 < selectedService.total && bytesToGB(selectedService.total) < 100)) {
+    const total = selectedService.total;
+    const remaining = Math.max(0,total - (selectedService.up + selectedService.down));
+
+    sessionStorage.setItem('total_volume', bytesToGB(total));
+    sessionStorage.setItem('remaining_volume', bytesToGB(remaining));
+
+    window.location.href = `/update_direct.html?user_id=${encodeURIComponent(user_id)}`;
+  }else{
+
+    
+    const total = selectedService.total;
+    const remaining = Math.max(0,total - (selectedService.up + selectedService.down));
+
+    sessionStorage.setItem('total_volume', bytesToGB(total));
+    sessionStorage.setItem('remaining_volume', bytesToGB(remaining));
+
+    window.location.href = `/update.html?user_id=${encodeURIComponent(user_id)}`;
+
+  }
+}
+
+
+
+
+
+
+
+
+    function viewService(subId) {
+    const selectedService = servicesData.find(service => String(service.subId) === String(subId));
+
+    if (!selectedService) {
+      console.error('سرویس با این ID پیدا نشد:', subId);
+      return;
+    }
+
+    fetch('/show_services', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        service: selectedService,
+        user_id: user_id
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('خطا در ارتباط با سرور');
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log('پاسخ سرور:', data);
+
+      // اضافه شده: اگر جواب سرور شامل close_app بود، اپ تلگرام رو ببند
+      if (data.close_app) {
+        setTimeout(() => {
+          Telegram.WebApp.close();
+        }, 500);
+      }
+    })
+    .catch(error => {
+      console.error('خطا:', error);
+    });
+  }
+
+
+  function toggleStatus(subId, checked) {
+  const selectedService = servicesData.find(service => service.subId === subId);
+
+  if (!selectedService) {
+    console.error('❌ سرویس با این subId پیدا نشد:', subId);
+    return;
+  }
+
+
+  const status = checked ? "on" : "off";
+
+  fetch('/toggle_status', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: user_id,        
+      status,
+      service: selectedService
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    console.log('✅', data.message);
+    alert(data.message);
+
+    // 🔹 بعد از toggle، داده‌ها را دوباره از سرور fetch کن
+    loadServices(user_id, true);
+  })
+  .catch(err => {
+    console.error('🚨 خطا در ارسال:', err);
+    alert('خطا در تغییر وضعیت سرویس!');
+  });
+}
+
+// ---------------------
+// فراخوانی اولیه صفحه با داده تزریق شده
+// ---------------------
+document.addEventListener('DOMContentLoaded', () => {
+  loadServices(user_id, false); // استفاده از data اولیه
+});
+
+
+
+  async function deleteService(subId) {
+  if (!confirm("آیا از حذف این سرویس مطمئن هستید؟")) return;
+
+  // پیدا کردن سرویس انتخاب‌شده
+  const selectedService = servicesData.find(service => String(service.subId) === String(subId));
+
+  if (!selectedService) {
+    console.error("سرویس موردنظر برای حذف پیدا نشد:", subId);
+    return;
+  }
+
+  try {
+    const response = await fetch('/delete_service', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        service: selectedService,
+        user_id: user_id,
+          // فرض بر اینکه user_id از URL گرفته شده
+      }),
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.Status === 'success') {
+      // قالب‌بندی پیام و مبلغ با جداکننده هزارگان فارسی
+      let message = result.message || '';
+      const regex = /([0-9,.]+)/; // پیدا کردن عدد در پیام
+      const match = message.match(regex);
+
+      if (match) {
+        const rawNumber = parseFloat(match[1].replace(/,/g, ''));
+        const formatted = Number.isInteger(rawNumber)
+          ? rawNumber.toLocaleString('en-US')
+          : rawNumber.toLocaleString('en-US', { minimumFractionDigits: 1 });
+        message = message.replace(match[1], formatted);
+      }
+
+      // اضافه کردن علامت تیک سبز اگر نبود
+      if (!message.includes('✅')) {
+        message = '✅ ' + message;
+      }
+
+      // حذف نقطه اضافی در انتهای پیام
+      message = message.trim().replace(/[.]+$/, '');
+
+      // نمایش پیام با alert
+      alert(message);
+
+      // نمایش موجودی جدید در صفحه
+      const bal = Number(result.balance);
+      if (!isNaN(bal)) {
+        document.getElementById('balanceDisplay').innerText =
+          'موجودی شما: ' + parseInt(bal).toLocaleString('en-US') + ' تومان';
+      }
+
+      // حذف سرویس از داده‌های محلی
+      servicesData = servicesData.filter(service => service.subId !== subId);
+      filteredData = filteredData.filter(service => service.subId !== subId);
+
+      // بروزرسانی صفحه
+      const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
+      currentPage = Math.max(1, Math.min(currentPage, totalPages));
+      
+      renderPage(currentPage);
+      renderPagination();
+      updateServiceCounts();
+
+
+      // بستن اپ اگر لازم بود
+      if (result.close_app) {
+        setTimeout(() => {
+          Telegram.WebApp.close();
+        }, 500);
+      }
+
+    } else {
+      alert('❌ خطا در حذف سرویس: ' + (result.message || 'خطای ناشناخته'));
+    }
+
+  } catch (error) {
+    console.error('خطا در حذف سرویس:', error);
+    alert('⚠️ خطا در ارتباط با سرور');
+  }
+}
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+  const searchText = e.target.value.trim().toLowerCase();
+
+  filteredData = servicesData.filter(service => {
+    // محاسبه نوع سرویس برای جستجو
+    let serviceType =
+      service.is_unlimited == 1 && (0 < service.total && bytesToGB(service.total) <= 100)
+        ? 'حجمی'
+        : service.limitip == 1 && (service.total == 0 || bytesToGB(service.total) > 100)
+        ? 'نامحدود تک کاربر'
+        : service.limitip == 2 && (service.total == 0 || bytesToGB(service.total) > 100)
+        ? 'نامحدود دو کاربر'
+        : 'نت ملی';
+
+    // alert(`${service.server_name}${service.email}`.toLowerCase());
+    // جستجو در email، comment و نوع سرویس
+    return (
+      `${service.server_name}${service.email}`.toLowerCase().includes(searchText) ||
+      (service.comment && service.comment.toLowerCase().includes(searchText)) ||
+      serviceType.toLowerCase().includes(searchText)
+    );
+  });
+
+  currentPage = 1;
+  renderPage(currentPage);
+  renderPagination();
+});
+
+    /////////////نمایش
+let showingInactiveOnly = false;
+let showingExpiringOnly = false;
+
+document.getElementById('toggleInactiveBtn').addEventListener('click', () => {
+  showingInactiveOnly = !showingInactiveOnly;
+  showingExpiringOnly = false;
+  document.getElementById('toggleExpiringBtn').innerText = 'نمایش سرویس‌های در حال انقضا';
+
+  if (showingInactiveOnly) {
+  filteredData = servicesData.filter(service => {
+    const { days, hours } = calculateExpireTime(service.mytime);
+
+    // منطق expire: اگر روز صفر باشد، ساعت بررسی می‌شود
+    const isExpired = days === 0 ? hours <= 0 : days <= 0;
+
+    return (
+      service.config_status === 0 ||
+      (service.is_unlimited == 0 && (service.up + service.down) >= service.total) ||
+      (service.is_unlimited == 1 &&
+        (0 < service.total && bytesToGB(service.total) <= 100) &&
+        (service.up + service.down) >= service.total) ||
+      isExpired
+    );
+  });
+
+    document.getElementById('toggleInactiveBtn').innerText = 'نمایش همه سرویس‌ها';
+  } else {
+    filteredData = servicesData;
+    document.getElementById('toggleInactiveBtn').innerText = 'نمایش فقط سرویس‌های غیرفعال';
+  }
+
+  currentPage = 1;
+  renderPage(currentPage);
+  renderPagination();
+});
+
+document.getElementById('toggleExpiringBtn').addEventListener('click', () => {
+  showingExpiringOnly = !showingExpiringOnly;
+  showingInactiveOnly = false;
+  document.getElementById('toggleInactiveBtn').innerText = 'نمایش فقط سرویس‌های غیرفعال';
+
+  if (showingExpiringOnly) {
+  filteredData = servicesData.filter(service => {
+    const { days: remainingDays } = calculateExpireTime(service.mytime);
+    const remainingTraffic = Math.max(0, service.total - (service.up + service.down));
+    console.log(Number(remainingTraffic), remainingDays);
+
+
+    return service.config_status !== 0 && (
+      (remainingDays > 0 && remainingDays <= 7) || // نزدیک به انقضا
+      (service.is_unlimited == 0 && (10 <= Number(bytesToGB(service.total)) && Number(bytesToGB(service.total)) < 100) && Number(remainingTraffic) > 0 && Number(remainingTraffic) < 5 * 1024 * 1024 * 1024) || // محدود و ترافیک کمتر از 5GB
+      (service.is_unlimited == 0 && (1 <= Number(bytesToGB(service.total)) && Number(bytesToGB(service.total)) < 10) && Number(remainingTraffic) > 0 && Number(remainingTraffic) < 0.5 * 1024 * 1024 * 1024) || // محدود و ترافیک کمتر از 5GB
+      (service.is_unlimited == 1 && (0 < service.total && Number(bytesToGB(service.total)) < 100) && Number(remainingTraffic) > 0 && Number(remainingTraffic) < 5 * 1024 * 1024 * 1024) // نامحدود با محدودیت خاص و ترافیک کمتر از 5GB
+    );
+  });
+
+    document.getElementById('toggleExpiringBtn').innerText = 'نمایش همه سرویس ها';
+  } else {
+    filteredData = servicesData;
+    document.getElementById('toggleExpiringBtn').innerText = 'نمایش سرویس‌های در حال انقضا';
+  }
+
+  currentPage = 1;
+  renderPage(currentPage);
+  renderPagination();
+});
+
+
+function updateServiceCounts() {
+  inactiveCount = servicesData.filter(service => {
+    const { days, hours } = calculateExpireTime(service.mytime);
+
+    // اگر روز صفر باشد، ساعت بررسی شود
+    const isExpired = days === 0 ? hours <= 0 : days <= 0;
+
+    return (
+      service.config_status === 0 ||
+      (service.is_unlimited == 0 && (service.up + service.down) >= service.total) ||
+      (service.is_unlimited == 1 &&
+        (0 < service.total && bytesToGB(service.total) <= 100) &&
+        (service.up + service.down) >= service.total) ||
+      isExpired
+    );
+  }).length;
+
+
+
+
+
+
+  const activeCount = servicesData.length - inactiveCount;
+
+  document.getElementById('serviceCounts').innerHTML = `
+    <span style="color: green;">سرویس فعال: ${activeCount.toLocaleString()}</span>
+    &nbsp;&nbsp;&nbsp;
+    <span style="color: red;">سرویس غیرفعال: ${inactiveCount.toLocaleString()}</span>
+  `;
+}
+
+
+
+    if (user_id) {
+      loadServices(user_id);
+    } else {
+      document.getElementById('balanceDisplay').innerText = 'شناسه کاربر پیدا نشد.';
+      document.getElementById('servicesContainer').innerText = '';
+    }
+  </script>
+</body>
+</html>
