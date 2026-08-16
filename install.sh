@@ -20,6 +20,9 @@ BOT_SERVICE="/etc/systemd/system/bot.service"
 
 NGINX_CONFIG="/etc/nginx/sites-available/nginx.conf"
 
+BACKUP_SCRIPT="$APP_DIR/backup.py"
+BACKUP_LOG="/var/log/bot-backup.log"
+
 
 # ==========================================================
 # COLORS
@@ -125,6 +128,7 @@ install_app() {
     echo "Updating system..."
     echo "=========================================="
 
+
     apt update
 
     if [ $? -ne 0 ]; then
@@ -148,6 +152,7 @@ install_app() {
     echo "Installing Nginx..."
     echo "=========================================="
 
+
     apt install nginx -y
 
 
@@ -159,6 +164,7 @@ install_app() {
     echo "=========================================="
     echo "Installing Certbot..."
     echo "=========================================="
+
 
     apt install \
         certbot \
@@ -175,6 +181,7 @@ install_app() {
     echo "Installing Git..."
     echo "=========================================="
 
+
     apt install git -y
 
 
@@ -187,7 +194,25 @@ install_app() {
     echo "Installing Python venv..."
     echo "=========================================="
 
+
     apt install python3-venv -y
+
+
+    # ======================================================
+    # INSTALL CRON
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "Installing Cron..."
+    echo "=========================================="
+
+
+    apt install cron -y
+
+    systemctl enable cron
+
+    systemctl start cron
 
 
     # ======================================================
@@ -196,6 +221,7 @@ install_app() {
 
     echo
     echo "Stopping Nginx..."
+
 
     systemctl stop nginx 2>/dev/null || true
 
@@ -208,6 +234,7 @@ install_app() {
     echo "=========================================="
     echo "Getting SSL certificate..."
     echo "=========================================="
+
 
     certbot certonly \
         --standalone \
@@ -263,6 +290,7 @@ install_app() {
     echo "Cloning GitHub repository..."
     echo "=========================================="
 
+
     git clone "$REPO" "$APP_DIR"
 
 
@@ -286,6 +314,7 @@ install_app() {
 
     echo
     echo "Project files:"
+    echo
 
     ls -la
 
@@ -306,6 +335,32 @@ install_app() {
         echo -e "${YELLOW}WARNING: tel.py not found.${NC}"
 
     fi
+
+
+    # ======================================================
+    # CHECK BACKUP.PY
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "Checking backup.py..."
+    echo "=========================================="
+
+
+    if [ ! -f "$BACKUP_SCRIPT" ]; then
+
+        echo -e "${RED}ERROR: backup.py not found in GitHub repository.${NC}"
+        echo
+        echo "Expected:"
+        echo "$BACKUP_SCRIPT"
+        echo
+
+        exit 1
+
+    fi
+
+
+    echo -e "${GREEN}backup.py found.${NC}"
 
 
     # ======================================================
@@ -459,6 +514,44 @@ EOF
 
 
     # ======================================================
+    # BACKUP CRON
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "Configuring backup cron..."
+    echo "=========================================="
+
+
+    # حذف Cron قبلی backup.py اگر وجود داشته باشد
+    crontab -l 2>/dev/null \
+        | grep -v "$BACKUP_SCRIPT" \
+        > /tmp/current_cron 2>/dev/null || true
+
+
+    # اجرای backup.py هر شب ساعت 00:00
+    echo "0 0 * * * $VENV/bin/python $BACKUP_SCRIPT >> $BACKUP_LOG 2>&1" \
+        >> /tmp/current_cron
+
+
+    crontab /tmp/current_cron
+
+    rm -f /tmp/current_cron
+
+
+    echo
+    echo -e "${GREEN}Backup cron installed.${NC}"
+
+    echo
+    echo "Schedule:"
+    echo "Every day at 00:00"
+
+    echo
+    echo "Command:"
+    echo "$VENV/bin/python $BACKUP_SCRIPT"
+
+
+    # ======================================================
     # NGINX CONFIG
     # ======================================================
 
@@ -588,6 +681,7 @@ EOF
     echo
     echo "Starting peak..."
 
+
     systemctl restart peak
 
 
@@ -601,6 +695,7 @@ EOF
     echo
     echo "Starting bot..."
 
+
     systemctl restart bot
 
 
@@ -613,6 +708,7 @@ EOF
 
     echo
     echo "Starting Nginx..."
+
 
     systemctl enable nginx
 
@@ -640,6 +736,7 @@ EOF
 
     echo
     echo "Testing SSL renewal..."
+
 
     certbot renew --dry-run || true
 
@@ -674,6 +771,24 @@ EOF
 
 
     echo
+    echo -e "${BLUE}Backup:${NC}"
+
+    echo "$BACKUP_SCRIPT"
+
+
+    echo
+    echo -e "${BLUE}Backup schedule:${NC}"
+
+    echo "Every day at 00:00"
+
+
+    echo
+    echo -e "${BLUE}Backup log:${NC}"
+
+    echo "$BACKUP_LOG"
+
+
+    echo
     echo "=========================================="
     echo "PEAK STATUS"
     echo "=========================================="
@@ -698,6 +813,15 @@ EOF
 
 
     systemctl --no-pager status nginx || true
+
+
+    echo
+    echo "=========================================="
+    echo "BACKUP CRON"
+    echo "=========================================="
+
+
+    crontab -l 2>/dev/null | grep "$BACKUP_SCRIPT" || true
 
 
     echo
@@ -748,6 +872,7 @@ remove_app() {
     echo "  bot.service"
     echo "  Nginx configuration"
     echo "  SSL certificate for $DOMAIN"
+    echo "  Backup cron job"
     echo
 
 
@@ -764,25 +889,43 @@ remove_app() {
     fi
 
 
+    # ======================================================
+    # STOP SERVICES
+    # ======================================================
+
     echo
     echo "Stopping peak..."
+
 
     systemctl stop peak 2>/dev/null || true
 
 
     echo "Stopping bot..."
 
+
     systemctl stop bot 2>/dev/null || true
 
 
+    # ======================================================
+    # DISABLE SERVICES
+    # ======================================================
+
+    echo
     echo "Disabling services..."
+
 
     systemctl disable peak 2>/dev/null || true
 
     systemctl disable bot 2>/dev/null || true
 
 
+    # ======================================================
+    # REMOVE SYSTEMD
+    # ======================================================
+
+    echo
     echo "Removing systemd files..."
+
 
     rm -f "$PEAK_SERVICE"
 
@@ -792,24 +935,76 @@ remove_app() {
     systemctl daemon-reload
 
 
+    # ======================================================
+    # REMOVE BACKUP CRON
+    # ======================================================
+
+    echo
+    echo "Removing backup cron..."
+
+
+    crontab -l 2>/dev/null \
+        | grep -v "$BACKUP_SCRIPT" \
+        > /tmp/current_cron 2>/dev/null || true
+
+
+    crontab /tmp/current_cron 2>/dev/null || true
+
+
+    rm -f /tmp/current_cron
+
+
+    # ======================================================
+    # REMOVE BACKUP LOG
+    # ======================================================
+
+    echo
+    echo "Removing backup log..."
+
+
+    rm -f "$BACKUP_LOG"
+
+
+    # ======================================================
+    # REMOVE NGINX
+    # ======================================================
+
+    echo
     echo "Removing Nginx configuration..."
+
 
     rm -f /etc/nginx/sites-enabled/nginx.conf
 
     rm -f /etc/nginx/sites-available/nginx.conf
 
 
+    # ======================================================
+    # REMOVE APPLICATION
+    # ======================================================
+
+    echo
     echo "Removing application..."
+
 
     rm -rf "$APP_DIR"
 
 
+    # ======================================================
+    # REMOVE SSL
+    # ======================================================
+
+    echo
     echo "Removing SSL certificate..."
+
 
     certbot delete \
         --cert-name "$DOMAIN" \
         --non-interactive 2>/dev/null || true
 
+
+    # ======================================================
+    # RESTART NGINX
+    # ======================================================
 
     if nginx -t >/dev/null 2>&1; then
 
@@ -817,6 +1012,10 @@ remove_app() {
 
     fi
 
+
+    # ======================================================
+    # DONE
+    # ======================================================
 
     echo
     echo "=========================================="
