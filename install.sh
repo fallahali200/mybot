@@ -1,6 +1,10 @@
 #!/bin/bash
 
-set -e
+# ==========================================================
+# SERVER INSTALLER
+# ==========================================================
+
+set -u
 
 # ==========================================================
 # CONFIG
@@ -14,6 +18,8 @@ VENV="$APP_DIR/env"
 PEAK_SERVICE="/etc/systemd/system/peak.service"
 BOT_SERVICE="/etc/systemd/system/bot.service"
 
+NGINX_CONFIG="/etc/nginx/sites-available/nginx.conf"
+
 
 # ==========================================================
 # COLORS
@@ -22,42 +28,41 @@ BOT_SERVICE="/etc/systemd/system/bot.service"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
 
 # ==========================================================
-# ROOT
+# ROOT CHECK
 # ==========================================================
 
 if [ "$EUID" -ne 0 ]; then
-    echo -e "${RED}Run this script with sudo.${NC}"
+
+    echo -e "${RED}Please run this script with sudo.${NC}"
+    echo
+    echo "Example:"
     echo
     echo "sudo bash install.sh"
+    echo
+
     exit 1
 fi
 
 
 # ==========================================================
-# DOMAIN
+# DOMAIN CLEAN
 # ==========================================================
 
-get_domain() {
+clean_domain() {
 
-    read -p "Enter your domain: " DOMAIN
+    local DOMAIN="$1"
 
     DOMAIN=$(echo "$DOMAIN" \
         | sed 's#https://##' \
         | sed 's#http://##' \
         | sed 's#/$##')
 
-    if [ -z "$DOMAIN" ]; then
-        echo -e "${RED}Domain cannot be empty.${NC}"
-        exit 1
-    fi
-
-    echo
-    echo "Domain: $DOMAIN"
-    echo
+    echo "$DOMAIN"
 }
 
 
@@ -67,16 +72,76 @@ get_domain() {
 
 install_app() {
 
-    get_domain
+    echo
+    echo "=========================================="
+    echo "             INSTALLATION"
+    echo "=========================================="
+    echo
 
 
+    # ======================================================
+    # DOMAIN
+    # ======================================================
+
+    read -p "Enter your domain: " DOMAIN
+
+    DOMAIN=$(clean_domain "$DOMAIN")
+
+
+    if [ -z "$DOMAIN" ]; then
+
+        echo -e "${RED}Domain cannot be empty.${NC}"
+
+        exit 1
+
+    fi
+
+
+    echo
+    echo -e "${GREEN}Domain:${NC} $DOMAIN"
+    echo -e "${GREEN}GitHub:${NC} $REPO"
+    echo
+
+
+    read -p "Continue installation? [y/N]: " CONFIRM
+
+
+    if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+
+        echo
+        echo "Installation cancelled."
+
+        exit 0
+
+    fi
+
+
+    # ======================================================
+    # UPDATE SYSTEM
+    # ======================================================
+
+    echo
     echo "=========================================="
     echo "Updating system..."
     echo "=========================================="
 
     apt update
+
+    if [ $? -ne 0 ]; then
+
+        echo -e "${RED}apt update failed.${NC}"
+
+        exit 1
+
+    fi
+
+
     apt upgrade -y
 
+
+    # ======================================================
+    # INSTALL NGINX
+    # ======================================================
 
     echo
     echo "=========================================="
@@ -86,21 +151,58 @@ install_app() {
     apt install nginx -y
 
 
+    # ======================================================
+    # INSTALL CERTBOT
+    # ======================================================
+
     echo
     echo "=========================================="
     echo "Installing Certbot..."
     echo "=========================================="
 
-    apt install certbot python3-certbot-nginx -y
+    apt install \
+        certbot \
+        python3-certbot-nginx \
+        -y
 
+
+    # ======================================================
+    # INSTALL GIT
+    # ======================================================
 
     echo
     echo "=========================================="
-    echo "Stopping Nginx..."
+    echo "Installing Git..."
     echo "=========================================="
 
-    systemctl stop nginx || true
+    apt install git -y
 
+
+    # ======================================================
+    # INSTALL PYTHON VENV
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "Installing Python venv..."
+    echo "=========================================="
+
+    apt install python3-venv -y
+
+
+    # ======================================================
+    # STOP NGINX
+    # ======================================================
+
+    echo
+    echo "Stopping Nginx..."
+
+    systemctl stop nginx 2>/dev/null || true
+
+
+    # ======================================================
+    # SSL CERTIFICATE
+    # ======================================================
 
     echo
     echo "=========================================="
@@ -114,79 +216,132 @@ install_app() {
         -d "$DOMAIN"
 
 
-    echo
-    echo "Starting Nginx..."
+    if [ $? -ne 0 ]; then
+
+        echo
+        echo -e "${RED}SSL certificate installation failed.${NC}"
+        echo
+        echo "Make sure:"
+        echo "1. Domain points to this server."
+        echo "2. Port 80 is open."
+        echo "3. No other service is using port 80."
+        echo
+
+        exit 1
+
+    fi
+
+
+    # ======================================================
+    # START NGINX
+    # ======================================================
 
     systemctl start nginx
 
 
     # ======================================================
-    # APP DIRECTORY
+    # APPLICATION DIRECTORY
     # ======================================================
 
     echo
     echo "=========================================="
-    echo "Creating application directory..."
+    echo "Preparing application directory..."
     echo "=========================================="
+
 
     rm -rf "$APP_DIR"
 
-    mkdir -p "$APP_DIR"
+    mkdir -p /var/www
 
 
     # ======================================================
-    # PYTHON VENV
-    # ======================================================
-
-    echo
-    echo "=========================================="
-    echo "Installing Python venv..."
-    echo "=========================================="
-
-    apt install python3.12-venv -y
-
-
-    echo
-    echo "Creating virtual environment..."
-
-    python3 -m venv "$VENV"
-
-
-    echo
-    echo "Activating virtual environment..."
-
-    source "$VENV/bin/activate"
-
-
-    # ======================================================
-    # GIT
+    # CLONE GITHUB
     # ======================================================
 
     echo
     echo "=========================================="
-    echo "Installing Git..."
+    echo "Cloning GitHub repository..."
     echo "=========================================="
-
-    apt install git -y
-
-
-    # ======================================================
-    # CLONE
-    # ======================================================
-
-    echo
-    echo "=========================================="
-    echo "Cloning GitHub project..."
-    echo "=========================================="
-
-    rm -rf "$APP_DIR"
 
     git clone "$REPO" "$APP_DIR"
 
 
+    if [ $? -ne 0 ]; then
+
+        echo
+        echo -e "${RED}Git clone failed.${NC}"
+        echo
+
+        exit 1
+
+    fi
+
+
+    # ======================================================
+    # CHECK PROJECT
+    # ======================================================
+
     cd "$APP_DIR"
 
-    source "$VENV/bin/activate"
+
+    echo
+    echo "Project files:"
+
+    ls -la
+
+    echo
+
+
+    if [ ! -f "$APP_DIR/app.py" ]; then
+
+        echo -e "${RED}ERROR: app.py not found.${NC}"
+
+        exit 1
+
+    fi
+
+
+    if [ ! -f "$APP_DIR/tel.py" ]; then
+
+        echo -e "${YELLOW}WARNING: tel.py not found.${NC}"
+
+    fi
+
+
+    # ======================================================
+    # CREATE VENV
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "Creating Python virtual environment..."
+    echo "=========================================="
+
+
+    rm -rf "$VENV"
+
+
+    python3 -m venv "$VENV"
+
+
+    if [ ! -f "$VENV/bin/python" ]; then
+
+        echo -e "${RED}Python virtual environment creation failed.${NC}"
+
+        exit 1
+
+    fi
+
+
+    # ======================================================
+    # PIP
+    # ======================================================
+
+    echo
+    echo "Upgrading pip..."
+
+
+    "$VENV/bin/python" -m pip install --upgrade pip
 
 
     # ======================================================
@@ -198,7 +353,9 @@ install_app() {
     echo "Installing Python packages..."
     echo "=========================================="
 
-    pip install flask \
+
+    "$VENV/bin/pip" install \
+        flask \
         pytelegrambotapi \
         "requests[socks]" \
         "qrcode[pil]" \
@@ -211,6 +368,16 @@ install_app() {
         aiohttp
 
 
+    if [ $? -ne 0 ]; then
+
+        echo
+        echo -e "${RED}Python package installation failed.${NC}"
+
+        exit 1
+
+    fi
+
+
     # ======================================================
     # PEAK SERVICE
     # ======================================================
@@ -220,7 +387,9 @@ install_app() {
     echo "Creating peak.service..."
     echo "=========================================="
 
+
     cat > "$PEAK_SERVICE" <<EOF
+
 [Unit]
 Description=Gunicorn instance to serve Flask app
 After=network.target
@@ -231,9 +400,12 @@ Group=www-data
 WorkingDirectory=$APP_DIR
 Environment="PATH=$VENV/bin"
 ExecStart=$VENV/bin/gunicorn --workers 3 --bind unix:$APP_DIR/peak.sock app:app
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
+
 EOF
 
 
@@ -246,38 +418,44 @@ EOF
     echo "Creating bot.service..."
     echo "=========================================="
 
+
     cat > "$BOT_SERVICE" <<EOF
+
 [Unit]
 Description=Telegram Bot Service
 After=network.target
 
 [Service]
+User=root
+Group=www-data
 WorkingDirectory=$APP_DIR
 ExecStart=$VENV/bin/python $APP_DIR/tel.py
 Restart=always
+RestartSec=5
 Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
+
 EOF
 
 
     # ======================================================
-    # SYSTEMD
+    # SYSTEMD RELOAD
     # ======================================================
 
     echo
     echo "=========================================="
-    echo "Starting systemd services..."
+    echo "Configuring systemd..."
     echo "=========================================="
+
 
     systemctl daemon-reload
 
+
     systemctl enable peak
-    systemctl start peak
 
     systemctl enable bot
-    systemctl start bot
 
 
     # ======================================================
@@ -289,13 +467,13 @@ EOF
     echo "Creating Nginx configuration..."
     echo "=========================================="
 
-    NGINX_CONFIG="/etc/nginx/sites-available/nginx.conf"
 
     cat > "$NGINX_CONFIG" <<EOF
 
 # HTTP -> HTTPS
 
 server {
+
     listen 80;
 
     server_name $DOMAIN www.$DOMAIN;
@@ -307,6 +485,7 @@ server {
 # HTTPS
 
 server {
+
     listen 443 ssl;
 
     server_name $DOMAIN www.$DOMAIN;
@@ -353,9 +532,11 @@ EOF
     echo "Enabling Nginx configuration..."
     echo "=========================================="
 
+
     rm -f /etc/nginx/sites-enabled/default
 
     rm -f /etc/nginx/sites-enabled/nginx.conf
+
 
     ln -s \
         /etc/nginx/sites-available/nginx.conf \
@@ -371,6 +552,7 @@ EOF
     echo "Setting permissions..."
     echo "=========================================="
 
+
     chown -R root:www-data "$APP_DIR"
 
     chmod 750 "$APP_DIR"
@@ -385,12 +567,54 @@ EOF
     echo "Testing Nginx..."
     echo "=========================================="
 
+
     nginx -t
 
 
+    if [ $? -ne 0 ]; then
+
+        echo
+        echo -e "${RED}Nginx configuration test failed.${NC}"
+
+        exit 1
+
+    fi
+
+
     # ======================================================
-    # RESTART NGINX
+    # START PEAK
     # ======================================================
+
+    echo
+    echo "Starting peak..."
+
+    systemctl restart peak
+
+
+    sleep 2
+
+
+    # ======================================================
+    # START BOT
+    # ======================================================
+
+    echo
+    echo "Starting bot..."
+
+    systemctl restart bot
+
+
+    sleep 2
+
+
+    # ======================================================
+    # START NGINX
+    # ======================================================
+
+    echo
+    echo "Starting Nginx..."
+
+    systemctl enable nginx
 
     systemctl restart nginx
 
@@ -401,8 +625,9 @@ EOF
 
     echo
     echo "=========================================="
-    echo "Enabling SSL auto renewal..."
+    echo "Configuring SSL auto renewal..."
     echo "=========================================="
+
 
     systemctl enable certbot.timer
 
@@ -410,50 +635,79 @@ EOF
 
 
     # ======================================================
-    # FINAL
+    # RENEWAL TEST
+    # ======================================================
+
+    echo
+    echo "Testing SSL renewal..."
+
+    certbot renew --dry-run || true
+
+
+    # ======================================================
+    # STATUS
     # ======================================================
 
     echo
     echo
     echo "=========================================="
-    echo -e "${GREEN}INSTALLATION COMPLETED${NC}"
+    echo -e "${GREEN}INSTALLATION FINISHED${NC}"
     echo "=========================================="
     echo
 
-    echo "Domain:"
+
+    echo -e "${BLUE}Website:${NC}"
+
     echo "https://$DOMAIN"
 
-    echo
-    echo "Application:"
-    echo "$APP_DIR"
 
     echo
-    echo "GitHub:"
+    echo -e "${BLUE}Application:${NC}"
+
+    echo "$APP_DIR"
+
+
+    echo
+    echo -e "${BLUE}GitHub:${NC}"
+
     echo "$REPO"
+
 
     echo
     echo "=========================================="
     echo "PEAK STATUS"
     echo "=========================================="
 
-    systemctl status peak --no-pager || true
+
+    systemctl --no-pager status peak || true
+
 
     echo
     echo "=========================================="
     echo "BOT STATUS"
     echo "=========================================="
 
-    systemctl status bot --no-pager || true
+
+    systemctl --no-pager status bot || true
+
 
     echo
     echo "=========================================="
     echo "NGINX STATUS"
     echo "=========================================="
 
-    systemctl status nginx --no-pager || true
+
+    systemctl --no-pager status nginx || true
+
 
     echo
+    echo "=========================================="
     echo -e "${GREEN}DONE${NC}"
+    echo "=========================================="
+    echo
+
+
+    read -p "Press Enter to exit..."
 }
 
 
@@ -465,34 +719,35 @@ remove_app() {
 
     echo
     echo "=========================================="
-    echo "REMOVE EVERYTHING"
+    echo "          REMOVE EVERYTHING"
     echo "=========================================="
     echo
 
+
     read -p "Enter domain: " DOMAIN
 
-    DOMAIN=$(echo "$DOMAIN" \
-        | sed 's#https://##' \
-        | sed 's#http://##' \
-        | sed 's#/$##')
+    DOMAIN=$(clean_domain "$DOMAIN")
 
 
     if [ -z "$DOMAIN" ]; then
+
         echo -e "${RED}Domain cannot be empty.${NC}"
+
         exit 1
+
     fi
 
 
     echo
     echo -e "${YELLOW}WARNING!${NC}"
     echo
-    echo "This will remove:"
+    echo "The following will be removed:"
     echo
-    echo "$APP_DIR"
-    echo "peak.service"
-    echo "bot.service"
-    echo "Nginx configuration"
-    echo "SSL certificate"
+    echo "  $APP_DIR"
+    echo "  peak.service"
+    echo "  bot.service"
+    echo "  Nginx configuration"
+    echo "  SSL certificate for $DOMAIN"
     echo
 
 
@@ -501,6 +756,7 @@ remove_app() {
 
     if [ "$CONFIRM" != "YES" ]; then
 
+        echo
         echo "Cancelled."
 
         exit 0
@@ -509,16 +765,17 @@ remove_app() {
 
 
     echo
-    echo "Stopping services..."
-
+    echo "Stopping peak..."
 
     systemctl stop peak 2>/dev/null || true
+
+
+    echo "Stopping bot..."
 
     systemctl stop bot 2>/dev/null || true
 
 
     echo "Disabling services..."
-
 
     systemctl disable peak 2>/dev/null || true
 
@@ -526,7 +783,6 @@ remove_app() {
 
 
     echo "Removing systemd files..."
-
 
     rm -f "$PEAK_SERVICE"
 
@@ -536,12 +792,23 @@ remove_app() {
     systemctl daemon-reload
 
 
-    echo "Removing Nginx..."
-
+    echo "Removing Nginx configuration..."
 
     rm -f /etc/nginx/sites-enabled/nginx.conf
 
     rm -f /etc/nginx/sites-available/nginx.conf
+
+
+    echo "Removing application..."
+
+    rm -rf "$APP_DIR"
+
+
+    echo "Removing SSL certificate..."
+
+    certbot delete \
+        --cert-name "$DOMAIN" \
+        --non-interactive 2>/dev/null || true
 
 
     if nginx -t >/dev/null 2>&1; then
@@ -551,25 +818,14 @@ remove_app() {
     fi
 
 
-    echo "Removing application..."
-
-
-    rm -rf "$APP_DIR"
-
-
-    echo "Removing SSL certificate..."
-
-
-    certbot delete \
-        --cert-name "$DOMAIN" \
-        --non-interactive 2>/dev/null || true
-
-
     echo
     echo "=========================================="
     echo -e "${GREEN}REMOVAL COMPLETED${NC}"
     echo "=========================================="
     echo
+
+
+    read -p "Press Enter to exit..."
 }
 
 
@@ -583,7 +839,7 @@ do
     clear
 
     echo "=========================================="
-    echo "             SERVER INSTALLER"
+    echo "            SERVER INSTALLER"
     echo "=========================================="
     echo
 
@@ -618,7 +874,8 @@ do
 
         3)
 
-            echo "Exit."
+            echo
+            echo "Bye."
 
             exit 0
 
