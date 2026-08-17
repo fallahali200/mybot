@@ -17,11 +17,15 @@ VENV="$APP_DIR/env"
 
 PEAK_SERVICE="/etc/systemd/system/peak.service"
 BOT_SERVICE="/etc/systemd/system/bot.service"
+TRADE_SERVICE="/etc/systemd/system/trade.service"
 
 NGINX_CONFIG="/etc/nginx/sites-available/nginx.conf"
 
 BACKUP_SCRIPT="$APP_DIR/backup.py"
 BACKUP_LOG="/var/log/bot-backup.log"
+
+TRADE_SCRIPT="$APP_DIR/trade.py"
+TRADE_LOG="/var/log/bot-trade.log"
 
 
 # ==========================================================
@@ -49,6 +53,7 @@ if [ "$EUID" -ne 0 ]; then
     echo
 
     exit 1
+
 fi
 
 
@@ -66,6 +71,24 @@ clean_domain() {
         | sed 's#/$##')
 
     echo "$DOMAIN"
+}
+
+
+# ==========================================================
+# CHECK COMMAND
+# ==========================================================
+
+check_command() {
+
+    local COMMAND_NAME="$1"
+
+    if ! command -v "$COMMAND_NAME" >/dev/null 2>&1; then
+
+        echo -e "${RED}Required command not found: $COMMAND_NAME${NC}"
+
+        exit 1
+
+    fi
 }
 
 
@@ -144,74 +167,57 @@ install_app() {
 
 
     # ======================================================
-    # INSTALL NGINX
+    # INSTALL PACKAGES
     # ======================================================
 
     echo
     echo "=========================================="
-    echo "Installing Nginx..."
-    echo "=========================================="
-
-
-    apt install nginx -y
-
-
-    # ======================================================
-    # INSTALL CERTBOT
-    # ======================================================
-
-    echo
-    echo "=========================================="
-    echo "Installing Certbot..."
+    echo "Installing required packages..."
     echo "=========================================="
 
 
     apt install \
+        nginx \
         certbot \
         python3-certbot-nginx \
+        git \
+        python3-venv \
+        python3-pip \
+        cron \
         -y
 
 
-    # ======================================================
-    # INSTALL GIT
-    # ======================================================
+    if [ $? -ne 0 ]; then
 
-    echo
-    echo "=========================================="
-    echo "Installing Git..."
-    echo "=========================================="
+        echo -e "${RED}Required package installation failed.${NC}"
 
+        exit 1
 
-    apt install git -y
+    fi
 
 
     # ======================================================
-    # INSTALL PYTHON VENV
+    # CHECK COMMANDS
     # ======================================================
 
-    echo
-    echo "=========================================="
-    echo "Installing Python venv..."
-    echo "=========================================="
-
-
-    apt install python3-venv -y
+    check_command nginx
+    check_command certbot
+    check_command git
+    check_command python3
+    check_command systemctl
 
 
     # ======================================================
-    # INSTALL CRON
+    # CRON
     # ======================================================
 
     echo
     echo "=========================================="
-    echo "Installing Cron..."
+    echo "Configuring Cron..."
     echo "=========================================="
 
-
-    apt install cron -y
 
     systemctl enable cron
-
     systemctl start cron
 
 
@@ -249,6 +255,7 @@ install_app() {
         echo -e "${RED}SSL certificate installation failed.${NC}"
         echo
         echo "Make sure:"
+        echo
         echo "1. Domain points to this server."
         echo "2. Port 80 is open."
         echo "3. No other service is using port 80."
@@ -257,13 +264,6 @@ install_app() {
         exit 1
 
     fi
-
-
-    # ======================================================
-    # START NGINX
-    # ======================================================
-
-    systemctl start nginx
 
 
     # ======================================================
@@ -321,6 +321,10 @@ install_app() {
     echo
 
 
+    # ======================================================
+    # CHECK APP.PY
+    # ======================================================
+
     if [ ! -f "$APP_DIR/app.py" ]; then
 
         echo -e "${RED}ERROR: app.py not found.${NC}"
@@ -330,11 +334,29 @@ install_app() {
     fi
 
 
+    echo -e "${GREEN}app.py found.${NC}"
+
+
+    # ======================================================
+    # CHECK TEL.PY
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "Checking tel.py..."
+    echo "=========================================="
+
+
     if [ ! -f "$APP_DIR/tel.py" ]; then
 
-        echo -e "${YELLOW}WARNING: tel.py not found.${NC}"
+        echo -e "${RED}ERROR: tel.py not found.${NC}"
+
+        exit 1
 
     fi
+
+
+    echo -e "${GREEN}tel.py found.${NC}"
 
 
     # ======================================================
@@ -364,6 +386,32 @@ install_app() {
 
 
     # ======================================================
+    # CHECK TRADE.PY
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "Checking trade.py..."
+    echo "=========================================="
+
+
+    if [ ! -f "$TRADE_SCRIPT" ]; then
+
+        echo -e "${RED}ERROR: trade.py not found in GitHub repository.${NC}"
+        echo
+        echo "Expected:"
+        echo "$TRADE_SCRIPT"
+        echo
+
+        exit 1
+
+    fi
+
+
+    echo -e "${GREEN}trade.py found.${NC}"
+
+
+    # ======================================================
     # CREATE VENV
     # ======================================================
 
@@ -388,6 +436,9 @@ install_app() {
     fi
 
 
+    echo -e "${GREEN}Virtual environment created.${NC}"
+
+
     # ======================================================
     # PIP
     # ======================================================
@@ -397,6 +448,15 @@ install_app() {
 
 
     "$VENV/bin/python" -m pip install --upgrade pip
+
+
+    if [ $? -ne 0 ]; then
+
+        echo -e "${RED}pip upgrade failed.${NC}"
+
+        exit 1
+
+    fi
 
 
     # ======================================================
@@ -433,6 +493,9 @@ install_app() {
     fi
 
 
+    echo -e "${GREEN}Python packages installed.${NC}"
+
+
     # ======================================================
     # PEAK SERVICE
     # ======================================================
@@ -444,7 +507,6 @@ install_app() {
 
 
     cat > "$PEAK_SERVICE" <<EOF
-
 [Unit]
 Description=Gunicorn instance to serve Flask app
 After=network.target
@@ -460,7 +522,6 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-
 EOF
 
 
@@ -475,7 +536,6 @@ EOF
 
 
     cat > "$BOT_SERVICE" <<EOF
-
 [Unit]
 Description=Telegram Bot Service
 After=network.target
@@ -491,7 +551,35 @@ Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
+EOF
 
+
+    # ======================================================
+    # TRADE SERVICE
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "Creating trade.service..."
+    echo "=========================================="
+
+
+    cat > "$TRADE_SERVICE" <<EOF
+[Unit]
+Description=Trade Telegram Bot Service
+After=network.target
+
+[Service]
+User=root
+Group=www-data
+WorkingDirectory=$APP_DIR
+ExecStart=$VENV/bin/python $APP_DIR/trade.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
 
@@ -509,8 +597,8 @@ EOF
 
 
     systemctl enable peak
-
     systemctl enable bot
+    systemctl enable trade
 
 
     # ======================================================
@@ -523,16 +611,23 @@ EOF
     echo "=========================================="
 
 
-    # حذف Cron قبلی backup.py اگر وجود داشته باشد
     crontab -l 2>/dev/null \
         | grep -v "$BACKUP_SCRIPT" \
+        | grep -v "$TRADE_SCRIPT" \
         > /tmp/current_cron 2>/dev/null || true
 
 
-    # اجرای backup.py هر شب ساعت 00:00
+    # ======================================================
+    # BACKUP EVERY DAY 00:00
+    # ======================================================
+
     echo "0 0 * * * $VENV/bin/python $BACKUP_SCRIPT >> $BACKUP_LOG 2>&1" \
         >> /tmp/current_cron
 
+
+    # ======================================================
+    # INSTALL CRON
+    # ======================================================
 
     crontab /tmp/current_cron
 
@@ -543,12 +638,16 @@ EOF
     echo -e "${GREEN}Backup cron installed.${NC}"
 
     echo
-    echo "Schedule:"
+    echo "Backup schedule:"
     echo "Every day at 00:00"
 
     echo
-    echo "Command:"
+    echo "Backup command:"
     echo "$VENV/bin/python $BACKUP_SCRIPT"
+
+    echo
+    echo "Backup log:"
+    echo "$BACKUP_LOG"
 
 
     # ======================================================
@@ -562,8 +661,9 @@ EOF
 
 
     cat > "$NGINX_CONFIG" <<EOF
-
+# ==========================================================
 # HTTP -> HTTPS
+# ==========================================================
 
 server {
 
@@ -575,7 +675,9 @@ server {
 }
 
 
+# ==========================================================
 # HTTPS
+# ==========================================================
 
 server {
 
@@ -594,6 +696,10 @@ server {
     ssl_ciphers HIGH:!aNULL:!MD5;
 
 
+    # ======================================================
+    # MAIN APPLICATION
+    # ======================================================
+
     location / {
 
         include proxy_params;
@@ -602,6 +708,10 @@ server {
 
     }
 
+
+    # ======================================================
+    # GX APPLICATION
+    # ======================================================
 
     location /gx/ {
 
@@ -612,7 +722,6 @@ server {
     }
 
 }
-
 EOF
 
 
@@ -668,10 +777,14 @@ EOF
 
         echo
         echo -e "${RED}Nginx configuration test failed.${NC}"
+        echo
 
         exit 1
 
     fi
+
+
+    echo -e "${GREEN}Nginx configuration is valid.${NC}"
 
 
     # ======================================================
@@ -683,7 +796,6 @@ EOF
 
 
     systemctl restart peak
-
 
     sleep 2
 
@@ -698,6 +810,18 @@ EOF
 
     systemctl restart bot
 
+    sleep 2
+
+
+    # ======================================================
+    # START TRADE
+    # ======================================================
+
+    echo
+    echo "Starting trade..."
+
+
+    systemctl restart trade
 
     sleep 2
 
@@ -742,7 +866,7 @@ EOF
 
 
     # ======================================================
-    # STATUS
+    # FINAL STATUS
     # ======================================================
 
     echo
@@ -753,10 +877,18 @@ EOF
     echo
 
 
+    # ======================================================
+    # WEBSITE
+    # ======================================================
+
     echo -e "${BLUE}Website:${NC}"
 
     echo "https://$DOMAIN"
 
+
+    # ======================================================
+    # APPLICATION
+    # ======================================================
 
     echo
     echo -e "${BLUE}Application:${NC}"
@@ -764,11 +896,19 @@ EOF
     echo "$APP_DIR"
 
 
+    # ======================================================
+    # GITHUB
+    # ======================================================
+
     echo
     echo -e "${BLUE}GitHub:${NC}"
 
     echo "$REPO"
 
+
+    # ======================================================
+    # BACKUP
+    # ======================================================
 
     echo
     echo -e "${BLUE}Backup:${NC}"
@@ -788,6 +928,38 @@ EOF
     echo "$BACKUP_LOG"
 
 
+    # ======================================================
+    # TRADE
+    # ======================================================
+
+    echo
+    echo -e "${BLUE}Trade:${NC}"
+
+    echo "$TRADE_SCRIPT"
+
+
+    echo
+    echo -e "${BLUE}Trade service:${NC}"
+
+    echo "trade.service"
+
+
+    echo
+    echo -e "${BLUE}Trade mode:${NC}"
+
+    echo "Always running"
+
+
+    echo
+    echo -e "${BLUE}Trade log:${NC}"
+
+    echo "journalctl -u trade -f"
+
+
+    # ======================================================
+    # PEAK STATUS
+    # ======================================================
+
     echo
     echo "=========================================="
     echo "PEAK STATUS"
@@ -796,6 +968,10 @@ EOF
 
     systemctl --no-pager status peak || true
 
+
+    # ======================================================
+    # BOT STATUS
+    # ======================================================
 
     echo
     echo "=========================================="
@@ -806,6 +982,23 @@ EOF
     systemctl --no-pager status bot || true
 
 
+    # ======================================================
+    # TRADE STATUS
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "TRADE STATUS"
+    echo "=========================================="
+
+
+    systemctl --no-pager status trade || true
+
+
+    # ======================================================
+    # NGINX STATUS
+    # ======================================================
+
     echo
     echo "=========================================="
     echo "NGINX STATUS"
@@ -814,6 +1007,10 @@ EOF
 
     systemctl --no-pager status nginx || true
 
+
+    # ======================================================
+    # BACKUP CRON
+    # ======================================================
 
     echo
     echo "=========================================="
@@ -824,6 +1021,81 @@ EOF
     crontab -l 2>/dev/null | grep "$BACKUP_SCRIPT" || true
 
 
+    # ======================================================
+    # TRADE SERVICE CHECK
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "TRADE SERVICE"
+    echo "=========================================="
+
+
+    systemctl is-enabled trade 2>/dev/null || true
+
+    systemctl is-active trade 2>/dev/null || true
+
+
+    # ======================================================
+    # COMMANDS
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "USEFUL COMMANDS"
+    echo "=========================================="
+
+
+    echo
+    echo "Trade status:"
+    echo "systemctl status trade"
+
+
+    echo
+    echo "Trade logs:"
+    echo "journalctl -u trade -f"
+
+
+    echo
+    echo "Bot status:"
+    echo "systemctl status bot"
+
+
+    echo
+    echo "Bot logs:"
+    echo "journalctl -u bot -f"
+
+
+    echo
+    echo "Peak status:"
+    echo "systemctl status peak"
+
+
+    echo
+    echo "Peak logs:"
+    echo "journalctl -u peak -f"
+
+
+    echo
+    echo "Restart trade:"
+    echo "systemctl restart trade"
+
+
+    echo
+    echo "Restart bot:"
+    echo "systemctl restart bot"
+
+
+    echo
+    echo "Restart peak:"
+    echo "systemctl restart peak"
+
+
+    echo
+    echo "Restart nginx:"
+    echo "systemctl restart nginx"
+
+
     echo
     echo "=========================================="
     echo -e "${GREEN}DONE${NC}"
@@ -832,6 +1104,7 @@ EOF
 
 
     read -p "Press Enter to exit..."
+
 }
 
 
@@ -870,9 +1143,12 @@ remove_app() {
     echo "  $APP_DIR"
     echo "  peak.service"
     echo "  bot.service"
+    echo "  trade.service"
     echo "  Nginx configuration"
     echo "  SSL certificate for $DOMAIN"
     echo "  Backup cron job"
+    echo "  Backup log"
+    echo "  Trade log"
     echo
 
 
@@ -890,7 +1166,7 @@ remove_app() {
 
 
     # ======================================================
-    # STOP SERVICES
+    # STOP PEAK
     # ======================================================
 
     echo
@@ -900,10 +1176,24 @@ remove_app() {
     systemctl stop peak 2>/dev/null || true
 
 
+    # ======================================================
+    # STOP BOT
+    # ======================================================
+
     echo "Stopping bot..."
 
 
     systemctl stop bot 2>/dev/null || true
+
+
+    # ======================================================
+    # STOP TRADE
+    # ======================================================
+
+    echo "Stopping trade..."
+
+
+    systemctl stop trade 2>/dev/null || true
 
 
     # ======================================================
@@ -918,9 +1208,11 @@ remove_app() {
 
     systemctl disable bot 2>/dev/null || true
 
+    systemctl disable trade 2>/dev/null || true
+
 
     # ======================================================
-    # REMOVE SYSTEMD
+    # REMOVE SYSTEMD FILES
     # ======================================================
 
     echo
@@ -931,20 +1223,25 @@ remove_app() {
 
     rm -f "$BOT_SERVICE"
 
+    rm -f "$TRADE_SERVICE"
+
 
     systemctl daemon-reload
 
+    systemctl reset-failed 2>/dev/null || true
+
 
     # ======================================================
-    # REMOVE BACKUP CRON
+    # REMOVE CRON
     # ======================================================
 
     echo
-    echo "Removing backup cron..."
+    echo "Removing backup and trade cron jobs..."
 
 
     crontab -l 2>/dev/null \
         | grep -v "$BACKUP_SCRIPT" \
+        | grep -v "$TRADE_SCRIPT" \
         > /tmp/current_cron 2>/dev/null || true
 
 
@@ -966,7 +1263,18 @@ remove_app() {
 
 
     # ======================================================
-    # REMOVE NGINX
+    # REMOVE TRADE LOG
+    # ======================================================
+
+    echo
+    echo "Removing trade log..."
+
+
+    rm -f "$TRADE_LOG"
+
+
+    # ======================================================
+    # REMOVE NGINX CONFIG
     # ======================================================
 
     echo
@@ -1025,6 +1333,7 @@ remove_app() {
 
 
     read -p "Press Enter to exit..."
+
 }
 
 
