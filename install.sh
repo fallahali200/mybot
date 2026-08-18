@@ -26,7 +26,7 @@ BACKUP_LOG="/var/log/bot-backup.log"
 
 TRADE_SCRIPT="$APP_DIR/trade.py"
 TRADE_LOG="/var/log/bot-trade.log"
-
+CURRENCIES_FILE="$APP_DIR/currencies.json"
 
 # ==========================================================
 # COLORS
