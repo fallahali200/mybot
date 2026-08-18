@@ -412,6 +412,31 @@ install_app() {
 
 
     # ======================================================
+    # CHECK CURRENCIES.JSON
+    # ======================================================
+    
+    echo
+    echo "=========================================="
+    echo "Checking currencies.json..."
+    echo "=========================================="
+    
+    if [ ! -f "$CURRENCIES_FILE" ]; then
+    
+        echo -e "${RED}ERROR: currencies.json not found in GitHub repository.${NC}"
+        echo
+        echo "Expected:"
+        echo "$CURRENCIES_FILE"
+        echo
+    
+        exit 1
+    
+    fi
+    
+    echo -e "${GREEN}currencies.json found.${NC}"
+
+
+
+    # ======================================================
     # CREATE VENV
     # ======================================================
 
