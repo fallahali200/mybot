@@ -19,12 +19,13 @@ from urllib.parse import quote
 import concurrent.futures
 from datetime import datetime
 # ---------- تنظیمات اولیه ----------
+# ---------- تنظیمات اولیه ----------
 login_url =  'login'
 list_inbound='panel/api/inbounds/list'
-add_inbound = 'panel/api/inbounds/add'
-add_client='panel/api/clients/add'
-delete_client='panel/api/clients/del/'
-update_client='panel/api/clients/update/'
+add_inbound =  'panel/api/inbounds/add'
+add_client='panel/api/inbounds/addClient'
+delete_client='panel/api/inbounds/'
+update_client='panel/api/inbounds/updateClient/'
 delete_inbound='panel/api/inbounds/del/'
 reset_traffic='panel/api/inbounds/'
 update_inbound='panel/api/inbounds/update/'
@@ -33,6 +34,7 @@ update_traffic_client='panel/api/inbounds/updateClientTraffic/'
 reset_all_traffic_client='panel/api/inbounds/resetAllClientTraffics'
 reset_all_traffic_inbounds='panel/api/inbounds/resetAllTraffics'                                                                 
 reset_client_traffic='panel/api/inbounds/resetClientTraffic'
+delete_client_by_email='panel/api/inbounds/delClientByEmail/'
 api_clients_list = "panel/api/clients/list"
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36"
@@ -384,59 +386,173 @@ def get_panels_with_capacity(is_unlimited):
     
 
 
-def api_request(method, url, token, json_data=None):
-
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Authorization": f"Bearer {token}"
-    }
-
-    try:
-        if method.lower() == "post":
-            r = requests.post(url, json=json_data, headers=headers, timeout=10)
-        else:
-            r = requests.get(url, headers=headers, timeout=10)
-
-        return r.json()
-
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return None
 
 
 
+                    
+def single_with_retries(
+    method,
+    url,
+    data=None,
+    json=None,
+    max_retries=5
+):
+    panel_match = re.match(r"^(.*?)(?=panel)", url)
 
+    if not panel_match:
+        raise ValueError(f"Invalid panel URL: {url}")
 
+    panel_url = panel_match.group(1)
 
-def single_with_retries(method, url, json_data=None):
-
-    # استخراج base url
-    panel_url = re.match(r"^(.*?)(?=panel)", url)
-    if not panel_url:
-        raise Exception("Invalid URL format")
-
-    panel_url = panel_url.group(1)
-
-    # گرفتن پنل از DB
     panel_data = get_specific_panel_with_address(panel_url)
 
-    if not panel_data:
-        raise Exception("Panel not found")
+    session = requests.Session()
 
-    token = panel_data.get("token")
+    login_data = {
+        "username": "admin",
+        "password": "admin"
+    }
 
-    if not token:
-        raise Exception("API token not found")
+    # Login اولیه
+    try:
+        login_res = session.post(
+            panel_url + login_url,
+            json=login_data,
+            timeout=5
+        )
 
-    # حالا درخواست واقعی
-    return api_request(
-        method,
-        url,
-        token,
-        json_data
-    )
+        if login_res.status_code != 200:
+            print("⚠️ Login اولیه شکست خورد.")
 
+    except Exception as e:
+        print(f"⚠️ خطا در Login اولیه: {e}")
+
+    response_data = None
+
+    backoff_base = 1
+    max_backoff = 2
+
+    for attempt in range(max_retries):
+
+        try:
+            # -------------------------
+            # POST
+            # -------------------------
+            if method.lower() == "post":
+
+                if data is not None:
+                    response = session.post(
+                        url=url,
+                        data=data,
+                        timeout=10
+                    )
+
+                elif json is not None:
+                    response = session.post(
+                        url=url,
+                        json=json,
+                        timeout=10
+                    )
+
+                else:
+                    response = session.post(
+                        url=url,
+                        timeout=10
+                    )
+
+            # -------------------------
+            # GET
+            # -------------------------
+            else:
+
+                if data is not None:
+                    response = session.get(
+                        url=url,
+                        params=data,
+                        timeout=10
+                    )
+
+                elif json is not None:
+                    response = session.get(
+                        url=url,
+                        json=json,
+                        timeout=10
+                    )
+
+                else:
+                    response = session.get(
+                        url=url,
+                        timeout=10
+                    )
+
+            response_data = response.json()
+
+            if response_data.get("success"):
+                print(
+                    f"✅ درخواست در تلاش {attempt + 1} موفق بود."
+                )
+                return response_data
+
+            raise Exception(
+                f"API response unsuccessful: {response_data}"
+            )
+
+        except Exception as e:
+
+            print(
+                f"❌ تلاش {attempt + 1} برای درخواست "
+                f"به {url} ناموفق بود: {e}"
+            )
+
+            # -------------------------
+            # Login مجدد
+            # -------------------------
+            try:
+                session.close()
+            except:
+                pass
+
+            session = requests.Session()
+
+            try:
+                login_res = session.post(
+                    panel_url + login_url,
+                    json=login_data,
+                    headers=headers,
+                    timeout=5
+                )
+
+                if (
+                    login_res.status_code != 200
+                    or not login_res.json().get("success")
+                ):
+                    print("⚠️ لاگین مجدد هم شکست خورد.")
+
+            except Exception as login_error:
+                print(
+                    f"⚠️ خطا در لاگین مجدد: {login_error}"
+                )
+
+            # -------------------------
+            # # Delay
+            # # -------------------------
+            # if attempt < max_retries - 1:
+
+            #     delay = min(
+            #         backoff_base * (2 ** attempt),
+            #         max_backoff
+            #     )
+
+            #     print(
+            #         f"⏳ تاخیر {delay} ثانیه قبل از "
+            #         f"تلاش مجدد..."
+            #     )
+
+            #     time.sleep(delay)
+
+    print("🚨 تمام تلاش‌ها شکست خورد.")
+
+    return response_data
 
 
 
@@ -500,33 +616,78 @@ def choose_panel_unlimited():
 
 
 
-def post_with_retries(method, url, json=None):
 
-    panels = get_all_panels_with_capacity()
-    result = []
-
+def post_with_retries(method,url, json=None, max_retries=10):
+    panels=get_all_panels_with_capacity()
+    result=[]     
     for panel in panels:
+     attempt = 0
+     response_data = None
+     backoff_base = 1  # زمان اولیه تاخیر (1 ثانیه)
+     max_backoff = 2  # حداکثر زمان backoff (10 ثانیه)
+     session = requests.session()
+     data = {
+        'username': 'admin',
+        'password': 'admin'
+    }
+     alpha = session.post(panel['panel_address']+login_url, json=data, timeout=5)
+     while attempt < max_retries:
+         try:
+             if json is not None:
+                 if method.lower() == "post":
+                     response = session.post(panel['panel_address']+url, json=json, timeout=10)
+                 else:
+                     response = session.get(panel['panel_address']+url, json=json, timeout=10)
 
-        token = panel.get("token")
-        if not token:
-            continue
+             else:
+                 if method.lower() == "post":
+                     response = session.post(panel['panel_address']+url, timeout=10)
+                 else:
+                     response = session.get(panel['panel_address']+url, timeout=10)  
 
-        full_url = panel['panel_address'] + url
+             response_data = response.json()
 
-        res = api_request(method, full_url, token, json)
+             if response_data.get("success"):
+                    result.append((response_data,panel['id'],panel['panel_address'],panel['is_unlimited'],panel['subscription_link'],panel['name'],panel['get_inbound']
+                                   
+                                   ))  # اضافه کردن به لیست نتایج
+                    break  # موفقیت‌آمیز بود
+             else:
+                 raise Exception("API response unsuccessful")
 
-        if res:
-            result.append(
-                (
-                    res,
-                    panel['id'],
-                    panel['panel_address'],
-                    panel['is_unlimited'],
-                    panel['subscription_link'],
-                    panel['name']
-                )
-            )
 
+
+         except Exception as e:
+             print(f"❌ تلاش {attempt+1} برای درخواست به {panel['panel_address']+url} ناموفق بود: {e}")
+             # تلاش برای لاگین مجدد
+             session.close()
+             session = requests.Session()
+             login_res = session.post(panel['panel_address']+'login', json=data, headers=headers)
+             if login_res.status_code != 200 or not login_res.json().get("success"):
+                 print("⚠️ لاگین مجدد هم شکست خورد.")
+
+             # ✅ Delay با Exponential Backoff
+             delay = min(backoff_base * (2 ** attempt), max_backoff)
+             print(f"⏳ تاخیر {delay} ثانیه قبل از تلاش مجدد...")
+             time.sleep(0.1)
+                 
+
+         attempt += 1
+         if not response_data or not response_data.get("success"):
+             print("🚨 تمام تلاش‌ها برای دریافت لیست شکست خورد. ریستارت کردن سرویس peak...")
+
+             # try:
+             #     subprocess.run(['/usr/bin/systemctl', 'restart', 'peak'])
+             #     print("✅ سرویس peak با موفقیت ریستارت شد.")
+             #     if json is not None:
+             #         response = session.post(url=url, json=json, timeout=10)
+             #     else:
+             #         response = session.post(url=url, timeout=10)
+
+             #     response_data = response.json()
+
+             # except subprocess.CalledProcessError as e:
+             #    print(f"❌ ریستارت peak با خطا مواجه شد: {e}")          
     return result
 
 
@@ -786,7 +947,7 @@ def serve_list():
     # -----------------------------
     # loop panels
     # -----------------------------
-    for res, panel_id, panel_address, is_unlimited, subscription_link,server_name in list_results:
+    for res, panel_id, panel_address, is_unlimited, subscription_link,server_name,get_inbound in list_results:
 
         if not isinstance(res, dict):
             continue
@@ -795,12 +956,13 @@ def serve_list():
             continue
 
         clients = res.get("obj", [])
+        clients = clients.get("rows", [])
 
         # -----------------------------
         # loop clients مستقیم
         # -----------------------------
         for client in clients:
-
+            uuid = client.get("memberships", [{}])[0].get("clientId")
             email = client.get("email", "")
             # فقط user خودش
             if str(user_id) not in email:
@@ -833,7 +995,7 @@ def serve_list():
                 "email": email_changed,
                 "subId": client.get("subId"),
                 "enable":client.get("enable"),
-                "uuid": client.get("uuid"),
+                "uuid": uuid,
                 "unchanged_email":email,
                 "enable": client.get("enable"),
                 "totalGB": client.get("totalGB"),
@@ -846,18 +1008,20 @@ def serve_list():
                 'comment': client.get('comment'),
                 "expiryTime": client.get("expiryTime"),
                 'server_name': server_name, 
-                "up": traffic.get("up"),
-                "down": traffic.get("down"),
+                "up": client.get("up"),
+                "down": client.get("down"),
                 "comment": client.get("comment"),
                 'my_expire': my_expire,
                 "created_at": created_at,
                 'config_status': my_status,
                 'mytime': client.get('expiryTime'),
-                'reset': client.get('reset')
+                'reset': client.get('reset'),
+                "InboundIDs":get_inbound
 
             }
 
             all_clients.append(client_config)
+            print(all_clients)
 
     # -----------------------------
     # sort
@@ -988,6 +1152,7 @@ def check_capacity_logic_direct():
             continue
 
         response_data = single_with_retries('get',panel['panel_address'] + api_clients_list)
+        print(response_data)
 
         if not response_data or not response_data.get("success"):
             print(f"❌ پنل {panel['panel_address']} موفق به دریافت لیست کاربران نشد.")
@@ -1081,7 +1246,7 @@ def list_users():
     # -----------------------------
     # loop panels
     # -----------------------------
-    for res, panel_id, panel_address, is_unlimited, subscription_link,server_name in list_results:
+    for res, panel_id, panel_address, is_unlimited, subscription_link,server_name,get_inbound in list_results:
 
         if not isinstance(res, dict):
             continue
@@ -1090,12 +1255,13 @@ def list_users():
             continue
 
         clients = res.get("obj", [])
+        clients = clients.get("rows", [])
 
         # -----------------------------
         # loop clients مستقیم
         # -----------------------------
         for client in clients:
-
+            uuid = client.get("memberships", [{}])[0].get("clientId")
             email = client.get("email", "")
             # فقط user خودش
             if str(user_id) not in email:
@@ -1124,12 +1290,11 @@ def list_users():
                 "panel": panel_address,
                 "is_unlimited": is_unlimited,
                 "subscription_link": subscription_link,
-
                 "id": client.get("id"),
                 "email": email_changed,
                 "subId": client.get("subId"),
                 "enable":client.get("enable"),
-                "uuid": client.get("uuid"),
+                "uuid": uuid,
                 "unchanged_email":email,
                 "enable": client.get("enable"),
                 "totalGB": client.get("totalGB"),
@@ -1142,18 +1307,20 @@ def list_users():
                 'comment': client.get('comment'),
                 "expiryTime": client.get("expiryTime"),
                 'server_name': server_name, 
-                "up": traffic.get("up"),
-                "down": traffic.get("down"),
+                "up": client.get("up"),
+                "down": client.get("down"),
                 "comment": client.get("comment"),
                 'my_expire': my_expire,
                 "created_at": created_at,
                 'config_status': my_status,
                 'mytime': client.get('expiryTime'),
-                'reset': client.get('reset')
+                'reset': client.get('reset'),
+                "InboundIDs":get_inbound
 
             }
 
             all_clients.append(client_config)
+            print(all_clients)
 
     # -----------------------------
     # sort
@@ -1221,8 +1388,12 @@ def delete_service():
     if net_byte_volume<0:
        net_byte_volume=0
     net_volume=bytes_to_gigabytes(net_byte_volume)
-    full_delete_url=services['panel']+delete_client+email
-    alpha_status=single_with_retries('post',full_delete_url)
+    InboundIDs = data['service']['InboundIDs']
+    get_inbound = [int(x) for x in InboundIDs.split(",")]
+    inbounds=get_inbound
+    for inbound in inbounds:
+     full_delete_url=services['panel']+f'/panel/api/inbounds/{inbound}/delClientByEmail/{email}'
+     alpha_status=single_with_retries('post',full_delete_url)
     if alpha_status.get('success'):                               
      delete_sql(user_id,subId)
      if user_exists(user_id):
@@ -1284,13 +1455,13 @@ def delete_service():
 @app.route('/toggle_status', methods=['POST'])
 def toggle_service():
      data = request.get_json()
-     print(data)
      status = data.get('status')
      panel=data['service']['panel']
      panel_id=data['service']['panel_id']
      username = data.get('user_id')
      uuid=data['service']['uuid']
-     # id = data['service']['inboundId']
+     InboundIDs = data['service']['InboundIDs']
+     get_inbound = [int(x) for x in InboundIDs.split(",")]
      flow=data['service']['flow']
      email=data['service']['unchanged_email']
      limitip=data['service']['limitip']
@@ -1303,23 +1474,38 @@ def toggle_service():
      reset=data['service']['reset']
      password=data['service']['password']
      auth=data['service']['auth']
-     full_status_url = panel+update_client + email
-     json_payload = {
-         "email": email,
-         "subId" : subId,
-         "id" : uuid,
-         "password": password,
-         "auth": auth,
-         "flow":flow,
-         "totalGB": totalGB,
-         "expiryTime": expiryTime,
-         "limitIp": limitip,
-         "tgId": tgld,
-         "comment": comment,
-         "enable": config_status,
-         }
-     alpha_status=single_with_retries('post',full_status_url,json_payload)
-     if alpha_status.get('success'):        
+     full_status_url = panel+update_client + uuid
+
+     clients = {
+         "clients": [
+             {
+                 "id": uuid,
+                 "flow": flow,
+                 "email": email,
+                 "limitip": limitip,
+                 "totalGB": totalGB,
+                 "expiryTime": expiryTime,
+                 "enable": config_status,
+                 "totalGB": totalGB,
+                 "expiryTime": expiryTime,
+                 "tgId": tgld,
+                 "subId": subId,
+                 "comment": comment,
+                 "reset": reset,
+             }
+         ]
+     }
+     inbound_ids = get_inbound
+     payload = [
+         ("id", inbound_ids[0]),
+     ]
+     for inbound_id in inbound_ids:
+         payload.append(("inboundIds", inbound_id))
+
+     payload.append(("settings", json.dumps(clients)))
+     print(payload)
+     response=single_with_retries('post',full_status_url,data=payload)
+     if response.get('success'):        
          config_status = 1 if status == 'on' else 0
            
          message = ('\u200F' + 'کانفیگ با موفقیت فعال شد' + ' ✅') if config_status else ('\u200F' + 'کانفیگ با موفقیت غیرفعال شد' + ' ⚠️')
@@ -1452,41 +1638,54 @@ def create_user_direct():
           panel_id,panel_address,subscription_link,get_inbound,panel_name=choose_panel_direct()
           clients=single_with_retries('get',panel_address+api_clients_list)
           clients = clients.get("obj", [])
-          total_clients = len(clients)
+          rows = clients.get("rows", [])
+          total_clients = clients.get("total", 0)
           if total_clients==0:
              config_name=str(total_clients+101)
           else:
-           latest_email = clients[-1]['email']
+           latest_email = rows[-1]['email']
            middle = latest_email.split("_")[1]
            config_name = str(int(middle.replace(panel_name,""))+1)
 
           client_uuid = str(uuid4())
           client_subid=random_string(20)
           email=user_id+"_"+panel_name+config_name
-          payload = {
-              "client": {
-                  "id": client_uuid,
-                  "email":email,
-                  "auth": random_string(16),
-                  "password": random_string(16),
-                  "subId": client_subid,
-                  "comment": username,
-                  "enable": True,
-                  "expiryTime": get_expiry_timestamp(expire),
-                  "flow": "xtls-rprx-vision",
-                  "tgId": 0,
-                  "limitIp": 0,
-                  "totalGB": gb_to_bytes(volume)
-              },
-              "inboundIds": get_inbound
+          clients = {
+              "clients": [
+                  {
+                      "email": email,
+                      "enable": True,
+                      "limitIp": 0,
+                      "comment": username,
+                      "subId": client_subid,
+                      "reset": 0,
+                      "tgId": 0,
+                      "totalGB": gb_to_bytes(volume),
+                      "expiryTime": get_expiry_timestamp(expire),
+                      "vpnUsername": random_string(10),
+                      "auth": random_string(16),
+                      "secret": random_string(8),
+                      "naiveUsername": "",
+                      "password": random_string(16),
+                      "uuid": client_uuid,
+                      "id": client_uuid
+                  }
+              ]
           }
 
+          inbound_ids = get_inbound
+          payload = [
+              ("id", inbound_ids[0]),
+          ]
+          for inbound_id in inbound_ids:
+              payload.append(("inboundIds", inbound_id))
+
+          payload.append(("settings", json.dumps(clients)))
           response = single_with_retries(
               "post",
               panel_address+add_client,
-              payload
+              data=payload
           )
-
           print("Response:", response)
 
           if response:
@@ -1560,23 +1759,39 @@ def create_user_unlimited():
           client_uuid = str(uuid4())
           client_subid=random_string(20)
           email=user_id+"_"+panel_name+config_name
-          payload = {
-              "client": {
-                  "id": client_uuid,
-                  "email":email,
-                  "auth": random_string(16),
-                  "password": random_string(16),
-                  "subId": client_subid,
-                  "comment": username,
-                  "enable": True,
-                  "expiryTime": get_expiry_timestamp(expire),
-                  "flow": "xtls-rprx-vision",
-                  "tgId": 0,
-                  "limitIp": limitip,
-                  "totalGB":0
-              },
-              "inboundIds":get_inbound
-          }          
+          client_data = {
+              "clients": [
+                  {
+                      "email": email,
+                      "enable": True,
+                      "limitIp": limitip,
+                      "comment": username,
+                      "subId": client_subid,
+                      "reset": 0,
+                      "tgId": 0,
+                      "totalGB": 0,
+                      "expiryTime": get_expiry_timestamp(expire),
+                      "vpnUsername": "tertertert",
+                      "auth": "ertyeryeryery",
+                      "secret": "secret",
+                      "naiveUsername": "",
+                      "password": "password",
+                      "uuid": client_uuid,
+                      "id": client_uuid
+                  }
+              ]
+          }
+          inbound_ids = [11]
+          payload = [
+              ("id", 11),
+          ]
+
+          for inbound in inbound_ids:
+              payload.append(("inboundIds", inbound))
+
+          payload.append(("settings", json.dumps(client_data)))  
+          print(payload)
+          
           
           response = single_with_retries(
               "post",
