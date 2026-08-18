@@ -83,9 +83,6 @@ def check_market():
     now = datetime.now()
     timestamp_now = int(now.timestamp())
     timestamp_100_days_ago = int((now - timedelta(days=100)).timestamp())
-
-    if message:
-        bot.send_message(CHAT_ID, message)
     with open('currencies.json', 'r') as json_file:
         data = json.load(json_file)    
     nobitex_list = data["nobitex_rsi"]
