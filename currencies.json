@@ -1,0 +1,25 @@
+{
+"nobitex_rsi": [
+    "BTCIRT",
+    "USDTIRT",
+    "XAUTIRT",
+    "XAUTUSDT"
+],   
+ "nobitex_list": [
+     "BTCIRT",
+     "USDTIRT",
+     "XAUTIRT",
+     "XAUTUSDT"
+ ],
+ "binance_rsi": [
+     "BTCUSDT"
+ ]
+ ,
+ "binance_list": [
+     "BTCUSDT",
+     "BNBETH",
+     "SOLBNB",
+     "BNBBTC",
+     "PAXGBTC"
+ ]
+}
