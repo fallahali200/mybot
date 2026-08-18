@@ -117,12 +117,7 @@ def check_market():
                 message += f"{my_currency} (Nobitex) RSI crossed above 50 {time_frame_msg}\n"
             if message.strip():
                 bot.send_message(CHAT_ID, message) 
-                
-                
-            if df['RSI'].iloc[-2] < 100 :
-                message += f"{my_currency} (Nobitex) RSI crossed above 50 {time_frame_msg}\n"
-            if message.strip():
-                bot.send_message(CHAT_ID, message)                 
+                                         
                 
               
     with open('currencies.json', 'r') as json_file:
