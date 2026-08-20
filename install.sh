@@ -130,6 +130,40 @@ validate_domain() {
 
 
 # ==========================================================
+# CHECK DNS
+# ==========================================================
+
+check_dns() {
+
+    local CHECK_DOMAIN="$1"
+
+    echo
+    echo "Checking DNS for:"
+    echo "$CHECK_DOMAIN"
+    echo
+
+
+    if command -v getent >/dev/null 2>&1; then
+
+        if getent ahosts "$CHECK_DOMAIN" >/dev/null 2>&1; then
+
+            echo -e "${GREEN}DNS appears to resolve: $CHECK_DOMAIN${NC}"
+
+        else
+
+            echo -e "${YELLOW}WARNING: DNS does not currently resolve for $CHECK_DOMAIN${NC}"
+            echo
+            echo "Make sure this domain points to this server."
+            echo
+
+        fi
+
+    fi
+
+}
+
+
+# ==========================================================
 # INSTALL
 # ==========================================================
 
@@ -146,7 +180,13 @@ install_app() {
     # MAIN DOMAIN
     # ======================================================
 
-    read -p "Enter your main domain: " DOMAIN
+    echo "Enter the main domain."
+    echo
+    echo "Example:"
+    echo "alpha.carselect.sbs"
+    echo
+
+    read -p "Main domain: " DOMAIN
 
     DOMAIN=$(clean_domain "$DOMAIN")
 
@@ -176,24 +216,23 @@ install_app() {
     echo "=========================================="
     echo
 
-    echo "Do you want to install the Sub application?"
-    echo
-    echo "If YES, a second domain will be requested."
+    echo "Do you want to install the Sub application"
+    echo "on a separate domain?"
     echo
     echo "Example:"
     echo
-    echo "Main domain:"
-    echo "  example.com"
+    echo "Main:"
+    echo "  alpha.carselect.sbs"
     echo
-    echo "Sub domain:"
-    echo "  sub.example.com"
+    echo "Sub:"
+    echo "  sub.carselect.sbs"
     echo
     echo "Routing:"
     echo
-    echo "  https://example.com/*"
+    echo "  https://alpha.carselect.sbs/*"
     echo "        -> peak.sock"
     echo
-    echo "  https://sub.example.com/gx/*"
+    echo "  https://sub.carselect.sbs/gx/*"
     echo "        -> sub.sock"
     echo
 
@@ -213,7 +252,7 @@ install_app() {
         echo
 
 
-        read -p "Enter Sub domain: " SUB_DOMAIN
+        read -p "Sub domain: " SUB_DOMAIN
 
         SUB_DOMAIN=$(clean_domain "$SUB_DOMAIN")
 
@@ -242,15 +281,6 @@ install_app() {
 
         echo
         echo -e "${GREEN}Sub application enabled.${NC}"
-        echo
-        echo "Main domain:"
-        echo "  https://$DOMAIN/*"
-        echo "        -> peak.sock"
-        echo
-        echo "Sub domain:"
-        echo "  https://$SUB_DOMAIN/gx/*"
-        echo "        -> sub.sock"
-
 
     else
 
@@ -258,8 +288,6 @@ install_app() {
 
         echo
         echo -e "${YELLOW}Sub application disabled.${NC}"
-        echo
-        echo "Everything -> peak.sock"
 
     fi
 
@@ -274,36 +302,87 @@ install_app() {
     echo "=========================================="
     echo
 
-    echo -e "${GREEN}Main Domain:${NC} $DOMAIN"
-    echo -e "${GREEN}GitHub:${NC} $REPO"
+    echo -e "${GREEN}Main Domain:${NC}"
+    echo "$DOMAIN"
 
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         echo
-        echo -e "${GREEN}Sub:${NC} ENABLED"
-        echo -e "${GREEN}Main URL:${NC} https://$DOMAIN/"
-        echo -e "${GREEN}Main socket:${NC} $APP_DIR/peak.sock"
-        echo -e "${GREEN}Sub domain:${NC} https://$SUB_DOMAIN/"
-        echo -e "${GREEN}Sub URL:${NC} https://$SUB_DOMAIN/gx/"
-        echo -e "${GREEN}Sub socket:${NC} $APP_DIR/sub.sock"
-
-    else
-
-        echo
-        echo -e "${YELLOW}Sub:${NC} DISABLED"
+        echo -e "${GREEN}Sub Domain:${NC}"
+        echo "$SUB_DOMAIN"
 
     fi
 
 
     echo
+    echo -e "${GREEN}GitHub:${NC}"
+    echo "$REPO"
+
+
+    echo
+    echo "=========================================="
+    echo "ROUTING"
+    echo "=========================================="
+
+
+    echo
+    echo "https://$DOMAIN/*"
+    echo "        -> peak.sock"
+
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo "https://$SUB_DOMAIN/gx/*"
+        echo "        -> sub.sock"
+
+        echo
+        echo "https://$SUB_DOMAIN/*"
+        echo "        -> peak.sock"
+
+    fi
+
+
+    echo
+    echo "=========================================="
+    echo
     echo "Continue installation?"
     echo
+
 
     read -p "Continue? [y/N]: " CONFIRM
 
 
     if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+
+        echo
+        echo "Installation cancelled."
+
+        exit 0
+
+    fi
+
+
+    # ======================================================
+    # DNS CHECK
+    # ======================================================
+
+    check_dns "$DOMAIN"
+
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        check_dns "$SUB_DOMAIN"
+
+    fi
+
+
+    echo
+    read -p "Continue even if DNS warning appears? [y/N]: " DNS_CONFIRM
+
+
+    if [[ ! "$DNS_CONFIRM" =~ ^[Yy]$ ]]; then
 
         echo
         echo "Installation cancelled."
@@ -409,11 +488,11 @@ install_app() {
 
     echo
     echo "=========================================="
-    echo "Getting SSL certificate..."
+    echo "Getting SSL certificate"
     echo "=========================================="
     echo
 
-    echo "Main domain:"
+    echo "Domain:"
     echo "$DOMAIN"
     echo
 
@@ -423,8 +502,7 @@ install_app() {
         --agree-tos \
         --register-unsafely-without-email \
         --non-interactive \
-        -d "$DOMAIN" \
-        -d "www.$DOMAIN"
+        -d "$DOMAIN"
 
 
     if [ $? -ne 0 ]; then
@@ -435,9 +513,8 @@ install_app() {
         echo "Make sure:"
         echo
         echo "1. $DOMAIN points to this server."
-        echo "2. www.$DOMAIN points to this server."
-        echo "3. Port 80 is open."
-        echo "4. No other service is using port 80."
+        echo "2. Port 80 is open."
+        echo "3. No other service is using port 80."
         echo
 
         exit 1
@@ -446,7 +523,7 @@ install_app() {
 
 
     echo
-    echo -e "${GREEN}SSL certificate for main domain installed successfully.${NC}"
+    echo -e "${GREEN}SSL certificate installed successfully for $DOMAIN.${NC}"
 
 
     # ======================================================
@@ -457,7 +534,7 @@ install_app() {
 
         echo
         echo "=========================================="
-        echo "Getting SSL certificate for Sub domain..."
+        echo "Getting SSL certificate for Sub domain"
         echo "=========================================="
         echo
 
@@ -492,7 +569,7 @@ install_app() {
 
 
         echo
-        echo -e "${GREEN}SSL certificate for Sub domain installed successfully.${NC}"
+        echo -e "${GREEN}SSL certificate installed successfully for $SUB_DOMAIN.${NC}"
 
     fi
 
@@ -968,7 +1045,7 @@ EOF
 
 
     # ======================================================
-    # NGINX CONFIGURATION
+    # NGINX CONFIG
     # ======================================================
 
     echo
@@ -978,10 +1055,11 @@ EOF
 
 
     # ======================================================
-    # MAIN DOMAIN HTTP
+    # MAIN DOMAIN
     # ======================================================
 
     cat > "$NGINX_CONFIG" <<EOF
+
 # ==========================================================
 # MAIN DOMAIN - HTTP
 # ==========================================================
@@ -990,9 +1068,10 @@ server {
 
     listen 80;
 
-    server_name $DOMAIN www.$DOMAIN;
+    server_name $DOMAIN;
 
     return 301 https://\$host\$request_uri;
+
 }
 
 
@@ -1004,7 +1083,7 @@ server {
 
     listen 443 ssl;
 
-    server_name $DOMAIN www.$DOMAIN;
+    server_name $DOMAIN;
 
 
     ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
@@ -1053,6 +1132,7 @@ server {
     server_name $SUB_DOMAIN;
 
     return 301 https://\$host\$request_uri;
+
 }
 
 
@@ -1091,7 +1171,7 @@ server {
 
 
     # ======================================================
-    # EVERYTHING ELSE ON SUB DOMAIN -> PEAK
+    # EVERYTHING ELSE -> PEAK
     # ======================================================
 
     location / {
@@ -1168,6 +1248,7 @@ EOF
     fi
 
 
+    echo
     echo -e "${GREEN}Nginx configuration is valid.${NC}"
 
 
@@ -1268,7 +1349,7 @@ EOF
 
     # ======================================================
     # FINAL STATUS
-    # ======================================================
+    # ==========================================================
 
     echo
     echo
@@ -1340,14 +1421,14 @@ EOF
 
 
     echo
-    echo "Main SSL certificate:"
+    echo "Main SSL:"
     echo "/etc/letsencrypt/live/$DOMAIN/"
 
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         echo
-        echo "Sub SSL certificate:"
+        echo "Sub SSL:"
         echo "/etc/letsencrypt/live/$SUB_DOMAIN/"
 
     fi
@@ -1474,7 +1555,7 @@ remove_app() {
     if ! validate_domain "$DOMAIN"; then
 
         echo
-        echo -e "${RED}Invalid domain.${NC}"
+        echo -e "${RED}Invalid main domain.${NC}"
         echo
 
         exit 1
@@ -1500,34 +1581,38 @@ remove_app() {
     echo
 
 
-    read -p "Do you also want to remove a Sub domain SSL? [y/N]: " REMOVE_SUB
-
-
     REMOVE_SUB_SSL="no"
     REMOVE_SUB_DOMAIN=""
+
+
+    read -p "Remove a Sub domain SSL too? [y/N]: " REMOVE_SUB
 
 
     if [[ "$REMOVE_SUB" =~ ^[Yy]$ ]]; then
 
         REMOVE_SUB_SSL="yes"
 
+
+        echo
         read -p "Enter Sub domain: " REMOVE_SUB_DOMAIN
 
         REMOVE_SUB_DOMAIN=$(clean_domain "$REMOVE_SUB_DOMAIN")
 
 
-        if [ -z "$REMOVE_SUB_DOMAIN" ]; then
+        if ! validate_domain "$REMOVE_SUB_DOMAIN"; then
 
-            echo -e "${RED}Sub domain cannot be empty.${NC}"
+            echo
+            echo -e "${RED}Invalid Sub domain.${NC}"
+            echo
 
             exit 1
 
         fi
 
+
         echo
-        echo "SSL certificate for:"
+        echo "Sub SSL that will be removed:"
         echo "$REMOVE_SUB_DOMAIN"
-        echo "will also be removed."
 
     fi
 
@@ -1652,7 +1737,8 @@ remove_app() {
     # ======================================================
 
     echo
-    echo "Removing main SSL certificate..."
+    echo "Removing SSL certificate for:"
+    echo "$DOMAIN"
 
 
     certbot delete \
@@ -1667,7 +1753,8 @@ remove_app() {
     if [ "$REMOVE_SUB_SSL" = "yes" ]; then
 
         echo
-        echo "Removing Sub SSL certificate..."
+        echo "Removing SSL certificate for:"
+        echo "$REMOVE_SUB_DOMAIN"
 
 
         certbot delete \
