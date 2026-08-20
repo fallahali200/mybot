@@ -609,9 +609,10 @@ def choose_panel_unlimited():
         if current_users >= panel["capacity"] or panel['status'] == 0:
             continue
         get_inbound = [int(x) for x in panel['get_inbound'].split(",")]
-        token = panel.get("username")
+        token = panel.get("token")
         if not token:
             continue
+        print(1000000)
         return panel['id'],panel['panel_address'],panel['subscription_link'],get_inbound,panel['name']
 
 
@@ -1392,7 +1393,7 @@ def delete_service():
     get_inbound = [int(x) for x in InboundIDs.split(",")]
     inbounds=get_inbound
     for inbound in inbounds:
-     full_delete_url=services['panel']+f'/panel/api/inbounds/{inbound}/delClientByEmail/{email}'
+     full_delete_url=services['panel']+f'panel/api/inbounds/{inbound}/delClientByEmail/{email}'
      alpha_status=single_with_retries('post',full_delete_url)
     if alpha_status.get('success'):                               
      delete_sql(user_id,subId)
@@ -1547,48 +1548,62 @@ def create_user():
           panel_id,panel_address,subscription_link,get_inbound,panel_name=choose_panel_meli()
           clients=single_with_retries('get',panel_address+api_clients_list)
           clients = clients.get("obj", [])
-          total_clients = len(clients)
+          rows = clients.get("rows", [])
+          total_clients = clients.get("total", 0)
           if total_clients==0:
              config_name=str(total_clients+101)
           else:
-           latest_email = clients[-1]['email']
+           latest_email = rows[-1]['email']
            middle = latest_email.split("_")[1]
            config_name = str(int(middle.replace(panel_name,""))+1)
 
           client_uuid = str(uuid4())
           client_subid=random_string(20)
           email=user_id+"_"+panel_name+config_name
-          payload = {
-              "client": {
-                  "id": client_uuid,
-                  "email":email,
-                  "auth": random_string(16),
-                  "password": random_string(16),
-                  "subId": client_subid,
-                  "comment": username,
-                  "enable": True,
-                  "expiryTime": get_expiry_timestamp(expire),
-                  "flow": "xtls-rprx-vision",
-                  "tgId": 0,
-                  "limitIp": 0,
-                  "totalGB": gb_to_bytes(volume)
-              },
-              "inboundIds": get_inbound
+          clients = {
+              "clients": [
+                  {
+                      "email": email,
+                      "enable": True,
+                      "limitIp": 0,
+                      "comment": username,
+                      "subId": client_subid,
+                      "reset": 0,
+                      "tgId": 0,
+                      "totalGB": gb_to_bytes(volume),
+                      "expiryTime": get_expiry_timestamp(expire),
+                      "vpnUsername": random_string(10),
+                      "auth": random_string(16),
+                      "secret": random_string(8),
+                      "naiveUsername": "",
+                      "password": random_string(16),
+                      "uuid": client_uuid,
+                      "id": client_uuid
+                  }
+              ]
           }
 
+          inbound_ids = get_inbound
+          payload = [
+              ("id", inbound_ids[0]),
+          ]
+          for inbound_id in inbound_ids:
+              payload.append(("inboundIds", inbound_id))
+
+          payload.append(("settings", json.dumps(clients)))
           response = single_with_retries(
               "post",
               panel_address+add_client,
-              payload
+              data=payload
           )
-
           print("Response:", response)
 
           if response:
               print("Success:", response.get("success"))
           else:
-              print("Failed request")   
-          if response.get('success'):      
+              print("Failed request")
+
+          if response.get('success'):       
            insert_sql(user_id,telegram_id,panel_id,panel_address,subscription_link,int(time.time() * 1000),client_subid,panel_name+config_name,expire)
            subscription_link='https://'+subscription_domain+'/gx/'+client_subid
            support_subscription_link_link='https://'+miniapp_domain+'/gx/'+client_subid
@@ -1748,18 +1763,20 @@ def create_user_unlimited():
           panel_id,panel_address,subscription_link,get_inbound,panel_name=choose_panel_unlimited()
           clients=single_with_retries('get',panel_address+api_clients_list)
           clients = clients.get("obj", [])
-          total_clients = len(clients)
+          rows = clients.get("rows", [])
+          total_clients = clients.get("total", 0)
           if total_clients==0:
              config_name=str(total_clients+101)
           else:
-           latest_email = clients[-1]['email']
+           latest_email = rows[-1]['email']
            middle = latest_email.split("_")[1]
            config_name = str(int(middle.replace(panel_name,""))+1)
 
           client_uuid = str(uuid4())
           client_subid=random_string(20)
           email=user_id+"_"+panel_name+config_name
-          client_data = {
+          
+          clients = {
               "clients": [
                   {
                       "email": email,
@@ -1771,40 +1788,36 @@ def create_user_unlimited():
                       "tgId": 0,
                       "totalGB": 0,
                       "expiryTime": get_expiry_timestamp(expire),
-                      "vpnUsername": "tertertert",
-                      "auth": "ertyeryeryery",
-                      "secret": "secret",
+                      "vpnUsername": random_string(10),
+                      "auth": random_string(16),
+                      "secret": random_string(8),
                       "naiveUsername": "",
-                      "password": "password",
+                      "password": random_string(16),
                       "uuid": client_uuid,
                       "id": client_uuid
                   }
               ]
           }
-          inbound_ids = [11]
+
+          inbound_ids = get_inbound
           payload = [
-              ("id", 11),
+              ("id", inbound_ids[0]),
           ]
+          for inbound_id in inbound_ids:
+              payload.append(("inboundIds", inbound_id))
 
-          for inbound in inbound_ids:
-              payload.append(("inboundIds", inbound))
-
-          payload.append(("settings", json.dumps(client_data)))  
-          print(payload)
-          
-          
+          payload.append(("settings", json.dumps(clients)))
           response = single_with_retries(
               "post",
               panel_address+add_client,
-              payload
+              data=payload
           )
-
           print("Response:", response)
 
           if response:
               print("Success:", response.get("success"))
           else:
-              print("Failed request")
+              print("Failed request")       
 
           if response.get('success'):       
            insert_sql(user_id,telegram_id,panel_id,panel_address,subscription_link,int(time.time() * 1000),client_subid,panel_name+config_name,expire)
@@ -2151,30 +2164,59 @@ def update_user_unlimited():
     panel=data['service']['panel']
     password=data['service']['password']
     auth=data['service']['auth']       
-    full_status_url = panel+update_client + email
-    json_payload = {
-        "email": email,
-        "subId" : subId,
-        "id" : uuid,
-        "password": password,
-        "auth": auth,
-        "flow":flow,
-        "totalGB":0,
-        "expiryTime": (get_expiry_timestamp(expire)),
-        "limitIp": new_limitip,
-        "tgId": tgld,
-        "comment": username,
-        "enable": True,
-        }
-    alpha_status=single_with_retries('post',full_status_url,json_payload)
+    full_status_url = panel+update_client + uuid   
+    clients = {
+        "clients": [
+            {
+                "id": uuid,
+                "flow": flow,
+                "email": email,
+                "limitip": limitip,
+                "totalGB": totalGB,
+                "expiryTime": expiryTime,
+                "enable": enable,
+                "tgId": tgld,
+                "subId":sub,
+                "comment": comment,
+                "reset": reset,
+                "speedLimitDown": random_string(8),
+                "speedLimitUp": "",
+                "userLimitOverride": random_string(16),
+                "vpnUsername": client_uuid,
+                "auth": auth,
+                "naiveUsername": client_uuid,
+                "password": password,
+                "uuid":uuid
+            }
+        ]
+    }
+
+    inbound_ids = get_inbound
+    payload = [
+        ("id", inbound_ids[0]),
+    ]
+    for inbound_id in inbound_ids:
+        payload.append(("inboundIds", inbound_id))
+
+    payload.append(("settings", json.dumps(clients)))
+    response = single_with_retries(
+        "post",
+        panel+add_client,
+        data=payload
+    )
+    print("Response:", response)
+
+    if response:
+        print("Success:", response.get("success"))
+    else:
+        print("Failed request")
+  
 
     used_volume=data['service']['up']+data['service']['down']
     total_volume=data['service']['total']
-    remaining_volume_volume=bytes_to_gigabytes(total_volume-used_volume)
     # full_reset_traffic_url=panel+reset_traffic+str(id)+'/resetClientTraffic/'+email
     # single_with_retries('post',full_reset_traffic_url)
-    alpha_status= single_with_retries('post',full_status_url,json_payload)  
-    if alpha_status.get('success'):           
+    if response.get('success'):           
       if user_exists(user_id):
         unlimited_config_one_price = get_specific_price('unlimited_config_one_price', user_id)
         unlimited_config_two_price = get_specific_price('unlimited_config_two_price', user_id)     
@@ -2617,7 +2659,6 @@ def toggle_status(id):
 
 
 
-
 import base64
 import os
 import re
@@ -2858,7 +2899,7 @@ def sub(path):
     # ------------------ USER ------------------
     user = {
         "username": name,
-        "subscription_url": f"https://{subscription_domain}{path}",
+        "subscription_url": f"https://{subscription_domain}/gx/{path}",
         "remaining_days": remaining_days,
         "status": status,
         "remaining_volume": remaining_volume,
@@ -2879,10 +2920,11 @@ def sub(path):
             "Profile-Title": "base64:" + base64.b64encode(b"v2ray").decode(),
             "Profile-Update-Interval": "2",
             "Subscription-Userinfo": f"upload={upload}; download={download}; total={total}; expire={expire}",
-            "profile-web-page-url": f"https://{subscription_domain}{path}",
+            "profile-web-page-url": f"https://{subscription_domain}/gx/{path}",
             "support-url":f"https://{miniapp_subdomain}/gx/{path}"
         }
     )
+
 
 
 

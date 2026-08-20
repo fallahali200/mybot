@@ -585,7 +585,7 @@ sessionStorage.setItem('ExpireDays', days);
     sessionStorage.setItem('limitip', selectedService.limitip);
     window.location.href = `/update_unlimited.html?user_id=${encodeURIComponent(user_id)}`;
 
-  } else if (selectedService.is_unlimited == 1 && (0 < selectedService.total && bytesToGB(selectedService.total) < 100)) {
+  } else if (selectedService.is_unlimited == 1 && (0 < selectedService.total && bytesToGB(selectedService.total) <= 100)) {
     const total = selectedService.total;
     const remaining = Math.max(0,total - (selectedService.up + selectedService.down));
 
