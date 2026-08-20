@@ -18,6 +18,7 @@ VENV="$APP_DIR/env"
 PEAK_SERVICE="/etc/systemd/system/peak.service"
 BOT_SERVICE="/etc/systemd/system/bot.service"
 TRADE_SERVICE="/etc/systemd/system/trade.service"
+SUB_SERVICE="/etc/systemd/system/sub.service"
 
 NGINX_CONFIG="/etc/nginx/sites-available/nginx.conf"
 
@@ -26,6 +27,7 @@ BACKUP_LOG="/var/log/bot-backup.log"
 
 TRADE_SCRIPT="$APP_DIR/trade.py"
 TRADE_LOG="/var/log/bot-trade.log"
+
 CURRENCIES_FILE="$APP_DIR/currencies.json"
 
 # ==========================================================
@@ -123,9 +125,50 @@ install_app() {
     fi
 
 
+    # ======================================================
+    # SUB APPLICATION
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "SUB APPLICATION"
+    echo "=========================================="
+    echo
+
+    echo "Do you want to install the sub application"
+    echo "on this server?"
+    echo
+    echo "If YES:"
+    echo "  /gx/ -> sub.sock"
+    echo
+    echo "If NO:"
+    echo "  /gx/ will not be configured."
+    echo
+
+    read -p "Install sub application on this server? [y/N]: " INSTALL_SUB
+
+
+    if [[ "$INSTALL_SUB" =~ ^[Yy]$ ]]; then
+
+        INSTALL_SUB="yes"
+
+        echo
+        echo -e "${GREEN}Sub application: ENABLED${NC}"
+
+    else
+
+        INSTALL_SUB="no"
+
+        echo
+        echo -e "${YELLOW}Sub application: DISABLED${NC}"
+
+    fi
+
+
     echo
     echo -e "${GREEN}Domain:${NC} $DOMAIN"
     echo -e "${GREEN}GitHub:${NC} $REPO"
+    echo -e "${GREEN}Sub application:${NC} $INSTALL_SUB"
     echo
 
 
@@ -414,26 +457,64 @@ install_app() {
     # ======================================================
     # CHECK CURRENCIES.JSON
     # ======================================================
-    
+
     echo
     echo "=========================================="
     echo "Checking currencies.json..."
     echo "=========================================="
-    
+
+
     if [ ! -f "$CURRENCIES_FILE" ]; then
-    
+
         echo -e "${RED}ERROR: currencies.json not found in GitHub repository.${NC}"
         echo
         echo "Expected:"
         echo "$CURRENCIES_FILE"
         echo
-    
+
         exit 1
-    
+
     fi
-    
+
+
     echo -e "${GREEN}currencies.json found.${NC}"
 
+
+    # ======================================================
+    # CHECK SUB APPLICATION
+    # ======================================================
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo "=========================================="
+        echo "Checking sub application..."
+        echo "=========================================="
+
+
+        # --------------------------------------------------
+        # CHANGE THIS FILE IF YOUR SUB APP USES ANOTHER
+        # PYTHON FILE.
+        # --------------------------------------------------
+
+        if [ ! -f "$APP_DIR/sub.py" ]; then
+
+            echo -e "${RED}ERROR: sub.py not found.${NC}"
+            echo
+            echo "Sub installation was enabled."
+            echo
+            echo "Expected:"
+            echo "$APP_DIR/sub.py"
+            echo
+
+            exit 1
+
+        fi
+
+
+        echo -e "${GREEN}sub.py found.${NC}"
+
+    fi
 
 
     # ======================================================
@@ -609,6 +690,43 @@ EOF
 
 
     # ======================================================
+    # SUB SERVICE
+    # ======================================================
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo "=========================================="
+        echo "Creating sub.service..."
+        echo "=========================================="
+
+
+        cat > "$SUB_SERVICE" <<EOF
+[Unit]
+Description=Sub Application Service
+After=network.target
+
+[Service]
+User=root
+Group=www-data
+WorkingDirectory=$APP_DIR
+Environment="PATH=$VENV/bin"
+ExecStart=$VENV/bin/gunicorn --workers 3 --bind unix:$APP_DIR/sub.sock sub:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    else
+
+        rm -f "$SUB_SERVICE"
+
+    fi
+
+
+    # ======================================================
     # SYSTEMD RELOAD
     # ======================================================
 
@@ -624,6 +742,13 @@ EOF
     systemctl enable peak
     systemctl enable bot
     systemctl enable trade
+
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        systemctl enable sub
+
+    fi
 
 
     # ======================================================
@@ -722,6 +847,40 @@ server {
 
 
     # ======================================================
+    # GX APPLICATION
+    # ======================================================
+
+EOF
+
+
+    # ======================================================
+    # ADD GX ONLY IF SUB IS INSTALLED
+    # ======================================================
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        cat >> "$NGINX_CONFIG" <<EOF
+
+    location /gx/ {
+
+        include proxy_params;
+
+        proxy_pass http://unix:$APP_DIR/sub.sock;
+
+    }
+
+EOF
+
+    fi
+
+
+    # ======================================================
+    # MAIN APPLICATION
+    # ======================================================
+
+    cat >> "$NGINX_CONFIG" <<EOF
+
+    # ======================================================
     # MAIN APPLICATION
     # ======================================================
 
@@ -730,19 +889,6 @@ server {
         include proxy_params;
 
         proxy_pass http://unix:$APP_DIR/peak.sock;
-
-    }
-
-
-    # ======================================================
-    # GX APPLICATION
-    # ======================================================
-
-    location /gx/ {
-
-        include proxy_params;
-
-        proxy_pass http://unix:$APP_DIR/sub.sock;
 
     }
 
@@ -852,6 +998,23 @@ EOF
 
 
     # ======================================================
+    # START SUB
+    # ======================================================
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo "Starting sub..."
+
+
+        systemctl restart sub
+
+        sleep 2
+
+    fi
+
+
+    # ======================================================
     # START NGINX
     # ======================================================
 
@@ -929,6 +1092,39 @@ EOF
     echo -e "${BLUE}GitHub:${NC}"
 
     echo "$REPO"
+
+
+    # ======================================================
+    # ROUTING
+    # ======================================================
+
+    echo
+    echo "=========================================="
+    echo "ROUTING"
+    echo "=========================================="
+
+
+    echo
+    echo "/ -> $APP_DIR/peak.sock"
+
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo "/gx/ -> $APP_DIR/sub.sock"
+
+        echo
+        echo -e "${GREEN}Sub application installed and enabled.${NC}"
+
+    else
+
+        echo
+        echo "/gx/ -> NOT CONFIGURED"
+
+        echo
+        echo -e "${YELLOW}Sub application was not installed.${NC}"
+
+    fi
 
 
     # ======================================================
@@ -1021,6 +1217,23 @@ EOF
 
 
     # ======================================================
+    # SUB STATUS
+    # ======================================================
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo "=========================================="
+        echo "SUB STATUS"
+        echo "=========================================="
+
+
+        systemctl --no-pager status sub || true
+
+    fi
+
+
+    # ======================================================
     # NGINX STATUS
     # ======================================================
 
@@ -1062,6 +1275,25 @@ EOF
 
 
     # ======================================================
+    # SUB SERVICE CHECK
+    # ======================================================
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo "=========================================="
+        echo "SUB SERVICE"
+        echo "=========================================="
+
+
+        systemctl is-enabled sub 2>/dev/null || true
+
+        systemctl is-active sub 2>/dev/null || true
+
+    fi
+
+
+    # ======================================================
     # COMMANDS
     # ======================================================
 
@@ -1099,6 +1331,25 @@ EOF
     echo
     echo "Peak logs:"
     echo "journalctl -u peak -f"
+
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo "Sub status:"
+        echo "systemctl status sub"
+
+
+        echo
+        echo "Sub logs:"
+        echo "journalctl -u sub -f"
+
+
+        echo
+        echo "Restart sub:"
+        echo "systemctl restart sub"
+
+    fi
 
 
     echo
@@ -1169,6 +1420,7 @@ remove_app() {
     echo "  peak.service"
     echo "  bot.service"
     echo "  trade.service"
+    echo "  sub.service"
     echo "  Nginx configuration"
     echo "  SSL certificate for $DOMAIN"
     echo "  Backup cron job"
@@ -1197,7 +1449,6 @@ remove_app() {
     echo
     echo "Stopping peak..."
 
-
     systemctl stop peak 2>/dev/null || true
 
 
@@ -1206,7 +1457,6 @@ remove_app() {
     # ======================================================
 
     echo "Stopping bot..."
-
 
     systemctl stop bot 2>/dev/null || true
 
@@ -1217,8 +1467,16 @@ remove_app() {
 
     echo "Stopping trade..."
 
-
     systemctl stop trade 2>/dev/null || true
+
+
+    # ======================================================
+    # STOP SUB
+    # ======================================================
+
+    echo "Stopping sub..."
+
+    systemctl stop sub 2>/dev/null || true
 
 
     # ======================================================
@@ -1235,6 +1493,8 @@ remove_app() {
 
     systemctl disable trade 2>/dev/null || true
 
+    systemctl disable sub 2>/dev/null || true
+
 
     # ======================================================
     # REMOVE SYSTEMD FILES
@@ -1249,6 +1509,8 @@ remove_app() {
     rm -f "$BOT_SERVICE"
 
     rm -f "$TRADE_SERVICE"
+
+    rm -f "$SUB_SERVICE"
 
 
     systemctl daemon-reload
@@ -1283,7 +1545,6 @@ remove_app() {
     echo
     echo "Removing backup log..."
 
-
     rm -f "$BACKUP_LOG"
 
 
@@ -1293,7 +1554,6 @@ remove_app() {
 
     echo
     echo "Removing trade log..."
-
 
     rm -f "$TRADE_LOG"
 
@@ -1317,7 +1577,6 @@ remove_app() {
 
     echo
     echo "Removing application..."
-
 
     rm -rf "$APP_DIR"
 
