@@ -30,6 +30,7 @@ TRADE_LOG="/var/log/bot-trade.log"
 
 CURRENCIES_FILE="$APP_DIR/currencies.json"
 
+
 # ==========================================================
 # COLORS
 # ==========================================================
@@ -112,7 +113,7 @@ install_app() {
     # MAIN DOMAIN
     # ======================================================
 
-    read -p "Enter your main domain: " DOMAIN
+    read -p "Enter your domain: " DOMAIN
 
     DOMAIN=$(clean_domain "$DOMAIN")
 
@@ -127,11 +128,11 @@ install_app() {
 
 
     # ======================================================
-    # SUB APPLICATION QUESTION
+    # SUB APPLICATION
     # ======================================================
 
-    SUB_DOMAIN=""
     INSTALL_SUB="no"
+
 
     echo
     echo "=========================================="
@@ -144,65 +145,33 @@ install_app() {
     echo
     echo "If YES:"
     echo
-    echo "  /gx/               -> sub.sock"
-    echo "  sub.yourdomain.com -> sub.sock"
+    echo "  $DOMAIN/gx/ -> sub.sock"
     echo
-    echo "If NO:"
-    echo
-    echo "  Only the main application will be installed."
+    echo "All other URLs -> peak.sock"
     echo
 
 
-    read -p "Install Sub application on this server? [y/N]: " INSTALL_SUB_ANSWER
+    read -p "Install Sub application? [y/N]: " SUB_CONFIRM
 
 
-    if [[ "$INSTALL_SUB_ANSWER" =~ ^[Yy]$ ]]; then
+    if [[ "$SUB_CONFIRM" =~ ^[Yy]$ ]]; then
 
         INSTALL_SUB="yes"
 
         echo
-        echo -e "${GREEN}Sub installation enabled.${NC}"
+        echo -e "${GREEN}Sub application enabled.${NC}"
         echo
-
-        # --------------------------------------------------
-        # SUB DOMAIN
-        # --------------------------------------------------
-
-        read -p "Enter Sub domain: " SUB_DOMAIN
-
-        SUB_DOMAIN=$(clean_domain "$SUB_DOMAIN")
-
-
-        if [ -z "$SUB_DOMAIN" ]; then
-
-            echo -e "${RED}Sub domain cannot be empty.${NC}"
-
-            exit 1
-
-        fi
-
-
-        if [ "$SUB_DOMAIN" = "$DOMAIN" ]; then
-
-            echo
-            echo -e "${RED}Sub domain cannot be the same as main domain.${NC}"
-            echo
-
-            exit 1
-
-        fi
-
-
-        echo
-        echo -e "${GREEN}Sub domain:${NC} $SUB_DOMAIN"
-
+        echo "$DOMAIN/gx/ -> sub.sock"
+        echo "Everything else -> peak.sock"
 
     else
 
         INSTALL_SUB="no"
 
         echo
-        echo -e "${YELLOW}Sub installation disabled.${NC}"
+        echo -e "${YELLOW}Sub application disabled.${NC}"
+        echo
+        echo "Everything -> peak.sock"
 
     fi
 
@@ -217,25 +186,28 @@ install_app() {
     echo "=========================================="
     echo
 
-    echo -e "${GREEN}Main domain:${NC} $DOMAIN"
+    echo -e "${GREEN}Domain:${NC} $DOMAIN"
+    echo -e "${GREEN}GitHub:${NC} $REPO"
+
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
-        echo -e "${GREEN}Sub domain:${NC}  $SUB_DOMAIN"
-        echo -e "${GREEN}Sub app:${NC}     ENABLED"
+        echo -e "${GREEN}Sub:${NC} ENABLED"
+        echo -e "${GREEN}Sub URL:${NC} https://$DOMAIN/gx/"
+        echo -e "${GREEN}Sub socket:${NC} $APP_DIR/sub.sock"
 
     else
 
-        echo -e "${YELLOW}Sub app:${NC}     DISABLED"
+        echo -e "${YELLOW}Sub:${NC} DISABLED"
 
     fi
 
+
     echo
-    echo -e "${GREEN}GitHub:${NC} $REPO"
+    echo "Continue installation?"
     echo
 
-
-    read -p "Continue installation? [y/N]: " CONFIRM
+    read -p "Continue? [y/N]: " CONFIRM
 
 
     if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
@@ -338,59 +310,27 @@ install_app() {
 
 
     # ======================================================
-    # SSL CERTIFICATES
+    # SSL CERTIFICATE
     # ======================================================
 
     echo
     echo "=========================================="
-    echo "Getting SSL certificates..."
+    echo "Getting SSL certificate..."
     echo "=========================================="
     echo
 
-
-    if [ "$INSTALL_SUB" = "yes" ]; then
-
-        echo "Main domain:"
-        echo "  $DOMAIN"
-
-        echo
-        echo "Sub domain:"
-        echo "  $SUB_DOMAIN"
-
-        echo
-        echo "Requesting certificates for both domains..."
-        echo
+    echo "Domain:"
+    echo "$DOMAIN"
+    echo
 
 
-        certbot certonly \
-            --standalone \
-            --agree-tos \
-            --register-unsafely-without-email \
-            --non-interactive \
-            -d "$DOMAIN" \
-            -d "www.$DOMAIN" \
-            -d "$SUB_DOMAIN"
-
-
-    else
-
-        echo "Main domain:"
-        echo "  $DOMAIN"
-
-        echo
-        echo "Requesting SSL certificate..."
-        echo
-
-
-        certbot certonly \
-            --standalone \
-            --agree-tos \
-            --register-unsafely-without-email \
-            --non-interactive \
-            -d "$DOMAIN" \
-            -d "www.$DOMAIN"
-
-    fi
+    certbot certonly \
+        --standalone \
+        --agree-tos \
+        --register-unsafely-without-email \
+        --non-interactive \
+        -d "$DOMAIN" \
+        -d "www.$DOMAIN"
 
 
     if [ $? -ne 0 ]; then
@@ -400,8 +340,8 @@ install_app() {
         echo
         echo "Make sure:"
         echo
-        echo "1. Domain points to this server."
-        echo "2. Sub domain points to this server if enabled."
+        echo "1. $DOMAIN points to this server."
+        echo "2. www.$DOMAIN points to this server."
         echo "3. Port 80 is open."
         echo "4. No other service is using port 80."
         echo
@@ -412,7 +352,7 @@ install_app() {
 
 
     echo
-    echo -e "${GREEN}SSL certificate(s) installed successfully.${NC}"
+    echo -e "${GREEN}SSL certificate installed successfully.${NC}"
 
 
     # ======================================================
@@ -455,7 +395,7 @@ install_app() {
 
 
     # ======================================================
-    # CHECK PROJECT
+    # PROJECT
     # ======================================================
 
     cd "$APP_DIR"
@@ -520,7 +460,11 @@ install_app() {
 
     if [ ! -f "$BACKUP_SCRIPT" ]; then
 
-        echo -e "${RED}ERROR: backup.py not found in GitHub repository.${NC}"
+        echo -e "${RED}ERROR: backup.py not found.${NC}"
+        echo
+        echo "Expected:"
+        echo "$BACKUP_SCRIPT"
+        echo
 
         exit 1
 
@@ -542,7 +486,11 @@ install_app() {
 
     if [ ! -f "$TRADE_SCRIPT" ]; then
 
-        echo -e "${RED}ERROR: trade.py not found in GitHub repository.${NC}"
+        echo -e "${RED}ERROR: trade.py not found.${NC}"
+        echo
+        echo "Expected:"
+        echo "$TRADE_SCRIPT"
+        echo
 
         exit 1
 
@@ -564,7 +512,11 @@ install_app() {
 
     if [ ! -f "$CURRENCIES_FILE" ]; then
 
-        echo -e "${RED}ERROR: currencies.json not found in GitHub repository.${NC}"
+        echo -e "${RED}ERROR: currencies.json not found.${NC}"
+        echo
+        echo "Expected:"
+        echo "$CURRENCIES_FILE"
+        echo
 
         exit 1
 
@@ -885,28 +837,28 @@ EOF
 
     cat > "$NGINX_CONFIG" <<EOF
 # ==========================================================
-# MAIN DOMAIN - HTTP
+# HTTP
 # ==========================================================
 
 server {
 
-    listen 80;
+    listen 80 default_server;
 
-    server_name $DOMAIN www.$DOMAIN;
+    server_name _;
 
     return 301 https://\$host\$request_uri;
 }
 
 
 # ==========================================================
-# MAIN DOMAIN - HTTPS
+# HTTPS
 # ==========================================================
 
 server {
 
-    listen 443 ssl;
+    listen 443 ssl default_server;
 
-    server_name $DOMAIN www.$DOMAIN;
+    server_name _;
 
 
     ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
@@ -919,20 +871,20 @@ server {
     ssl_ciphers HIGH:!aNULL:!MD5;
 
 
+    # ======================================================
+    # GX -> SUB
+    # ======================================================
+
 EOF
 
 
     # ======================================================
-    # MAIN DOMAIN GX ROUTE
+    # SUB ROUTE
     # ======================================================
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         cat >> "$NGINX_CONFIG" <<EOF
-
-    # ======================================================
-    # GX APPLICATION
-    # ======================================================
 
     location /gx/ {
 
@@ -949,13 +901,13 @@ EOF
 
 
     # ======================================================
-    # MAIN APPLICATION
+    # EVERYTHING ELSE -> PEAK
     # ======================================================
 
     cat >> "$NGINX_CONFIG" <<EOF
 
     # ======================================================
-    # MAIN APPLICATION
+    # EVERYTHING ELSE -> PEAK
     # ======================================================
 
     location / {
@@ -968,68 +920,6 @@ EOF
 
 }
 EOF
-
-
-    # ======================================================
-    # SUB DOMAIN NGINX
-    # ======================================================
-
-    if [ "$INSTALL_SUB" = "yes" ]; then
-
-        cat >> "$NGINX_CONFIG" <<EOF
-
-
-# ==========================================================
-# SUB DOMAIN - HTTP
-# ==========================================================
-
-server {
-
-    listen 80;
-
-    server_name $SUB_DOMAIN;
-
-    return 301 https://\$host\$request_uri;
-}
-
-
-# ==========================================================
-# SUB DOMAIN - HTTPS
-# ==========================================================
-
-server {
-
-    listen 443 ssl;
-
-    server_name $SUB_DOMAIN;
-
-
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-
-
-    ssl_protocols TLSv1.2 TLSv1.3;
-
-    ssl_ciphers HIGH:!aNULL:!MD5;
-
-
-    # ======================================================
-    # SUB APPLICATION
-    # ======================================================
-
-    location / {
-
-        include proxy_params;
-
-        proxy_pass http://unix:$APP_DIR/sub.sock;
-
-    }
-
-}
-EOF
-
-    fi
 
 
     # ======================================================
@@ -1195,21 +1085,8 @@ EOF
     echo
 
 
-    echo -e "${BLUE}Main Website:${NC}"
+    echo -e "${BLUE}Website:${NC}"
     echo "https://$DOMAIN"
-
-
-    if [ "$INSTALL_SUB" = "yes" ]; then
-
-        echo
-        echo -e "${BLUE}Sub Website:${NC}"
-        echo "https://$SUB_DOMAIN"
-
-        echo
-        echo -e "${BLUE}GX URL:${NC}"
-        echo "https://$DOMAIN/gx/"
-
-    fi
 
 
     echo
@@ -1222,24 +1099,38 @@ EOF
     echo "$REPO"
 
 
+    # ======================================================
+    # ROUTING
+    # ======================================================
+
     echo
     echo "=========================================="
     echo "ROUTING"
     echo "=========================================="
 
 
-    echo
-    echo "/ -> peak.sock"
-
-
     if [ "$INSTALL_SUB" = "yes" ]; then
 
-        echo "/gx/ -> sub.sock"
+        echo
+        echo "https://$DOMAIN/gx/*"
+        echo "        -> sub.sock"
 
-        echo "$SUB_DOMAIN/ -> sub.sock"
+        echo
+        echo "Everything else"
+        echo "        -> peak.sock"
+
+    else
+
+        echo
+        echo "Everything"
+        echo "        -> peak.sock"
 
     fi
 
+
+    # ======================================================
+    # SSL
+    # ======================================================
 
     echo
     echo "=========================================="
@@ -1248,20 +1139,33 @@ EOF
 
 
     echo
-    echo "SSL auto renewal: ENABLED"
+    echo "SSL certificate:"
+    echo "/etc/letsencrypt/live/$DOMAIN/"
+
 
     echo
-    echo "Renewal timer:"
+    echo "Auto renewal:"
+    echo "ENABLED"
+
+
+    echo
+    echo "Check renewal timer:"
     echo "systemctl status certbot.timer"
+
 
     echo
     echo "Manual renewal:"
     echo "certbot renew"
 
+
     echo
-    echo "Renewal test:"
+    echo "Test renewal:"
     echo "certbot renew --dry-run"
 
+
+    # ======================================================
+    # SERVICES
+    # ======================================================
 
     echo
     echo "=========================================="
@@ -1273,9 +1177,11 @@ EOF
     echo "Peak:"
     echo "systemctl status peak"
 
+
     echo
     echo "Bot:"
     echo "systemctl status bot"
+
 
     echo
     echo "Trade:"
@@ -1291,6 +1197,10 @@ EOF
     fi
 
 
+    # ======================================================
+    # LOGS
+    # ======================================================
+
     echo
     echo "=========================================="
     echo "LOGS"
@@ -1301,9 +1211,11 @@ EOF
     echo "Peak:"
     echo "journalctl -u peak -f"
 
+
     echo
     echo "Bot:"
     echo "journalctl -u bot -f"
+
 
     echo
     echo "Trade:"
@@ -1344,7 +1256,7 @@ remove_app() {
     echo
 
 
-    read -p "Enter main domain: " DOMAIN
+    read -p "Enter domain: " DOMAIN
 
     DOMAIN=$(clean_domain "$DOMAIN")
 
@@ -1359,16 +1271,6 @@ remove_app() {
 
 
     echo
-    echo "If you installed a Sub domain, enter it."
-    echo "Otherwise just press Enter."
-    echo
-
-    read -p "Enter Sub domain: " SUB_DOMAIN
-
-    SUB_DOMAIN=$(clean_domain "$SUB_DOMAIN")
-
-
-    echo
     echo -e "${YELLOW}WARNING!${NC}"
     echo
     echo "The following will be removed:"
@@ -1380,15 +1282,6 @@ remove_app() {
     echo "  sub.service"
     echo "  Nginx configuration"
     echo "  SSL certificate for $DOMAIN"
-    
-
-    if [ -n "$SUB_DOMAIN" ]; then
-
-        echo "  SSL configuration for $SUB_DOMAIN"
-
-    fi
-
-
     echo "  Backup cron job"
     echo "  Backup log"
     echo "  Trade log"
@@ -1487,7 +1380,7 @@ remove_app() {
 
 
     # ======================================================
-    # REMOVE NGINX
+    # REMOVE NGINX CONFIG
     # ======================================================
 
     echo
@@ -1510,11 +1403,11 @@ remove_app() {
 
 
     # ======================================================
-    # REMOVE MAIN SSL
+    # REMOVE SSL
     # ======================================================
 
     echo
-    echo "Removing main SSL certificate..."
+    echo "Removing SSL certificate..."
 
 
     certbot delete \
