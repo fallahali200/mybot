@@ -20,7 +20,8 @@ BOT_SERVICE="/etc/systemd/system/bot.service"
 TRADE_SERVICE="/etc/systemd/system/trade.service"
 SUB_SERVICE="/etc/systemd/system/sub.service"
 
-NGINX_CONFIG="/etc/nginx/sites-available/nginx.conf"
+NGINX_AVAILABLE="/etc/nginx/sites-available/bot.conf"
+NGINX_ENABLED="/etc/nginx/sites-enabled/bot.conf"
 
 BACKUP_SCRIPT="$APP_DIR/backup.py"
 BACKUP_LOG="/var/log/bot-backup.log"
@@ -52,10 +53,10 @@ NC='\033[0m'
 
 if [ "$EUID" -ne 0 ]; then
 
+    echo
     echo -e "${RED}Please run this script with sudo.${NC}"
     echo
     echo "Example:"
-    echo
     echo "sudo bash install.sh"
     echo
 
@@ -65,35 +66,76 @@ fi
 
 
 # ==========================================================
-# DOMAIN CLEAN
+# FUNCTIONS
 # ==========================================================
 
 clean_domain() {
 
-    local DOMAIN_INPUT="$1"
+    local INPUT="$1"
 
-    DOMAIN_INPUT=$(echo "$DOMAIN_INPUT" \
-        | sed 's#https://##' \
-        | sed 's#http://##' \
+    INPUT=$(echo "$INPUT" \
+        | sed 's#^[[:space:]]*##' \
+        | sed 's#[[:space:]]*$##' \
+        | sed 's#^https://##' \
+        | sed 's#^http://##' \
         | sed 's#/$##' \
-        | sed 's/[[:space:]]//g')
+        | tr -d '[:space:]')
 
-    echo "$DOMAIN_INPUT"
+    echo "$INPUT"
 
 }
 
 
 # ==========================================================
-# CHECK COMMAND
+# DOMAIN VALIDATION
+# ==========================================================
+
+valid_domain() {
+
+    local D="$1"
+
+    if [ -z "$D" ]; then
+        return 1
+    fi
+
+    if [[ "$D" == *"/"* ]]; then
+        return 1
+    fi
+
+    if [[ "$D" == *":"* ]]; then
+        return 1
+    fi
+
+    if [[ "$D" == *"@"* ]]; then
+        return 1
+    fi
+
+    if [[ "$D" == *" "* ]]; then
+        return 1
+    fi
+
+    if [[ ! "$D" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+        return 1
+    fi
+
+    return 0
+
+}
+
+
+# ==========================================================
+# COMMAND CHECK
 # ==========================================================
 
 check_command() {
 
-    local COMMAND_NAME="$1"
+    local CMD="$1"
 
-    if ! command -v "$COMMAND_NAME" >/dev/null 2>&1; then
+    if ! command -v "$CMD" >/dev/null 2>&1; then
 
-        echo -e "${RED}Required command not found: $COMMAND_NAME${NC}"
+        echo
+        echo -e "${RED}Command not found: $CMD${NC}"
+        echo
 
         exit 1
 
@@ -103,60 +145,28 @@ check_command() {
 
 
 # ==========================================================
-# VALIDATE DOMAIN
-# ==========================================================
-
-validate_domain() {
-
-    local DOMAIN_INPUT="$1"
-
-    if [ -z "$DOMAIN_INPUT" ]; then
-
-        return 1
-
-    fi
-
-
-    if [[ ! "$DOMAIN_INPUT" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]]; then
-
-        return 1
-
-    fi
-
-
-    return 0
-
-}
-
-
-# ==========================================================
-# CHECK DNS
+# DNS CHECK
 # ==========================================================
 
 check_dns() {
 
-    local CHECK_DOMAIN="$1"
+    local D="$1"
 
     echo
-    echo "Checking DNS for:"
-    echo "$CHECK_DOMAIN"
+    echo "Checking DNS:"
+    echo "$D"
     echo
 
+    if getent hosts "$D" >/dev/null 2>&1; then
 
-    if command -v getent >/dev/null 2>&1; then
+        echo -e "${GREEN}DNS resolves: $D${NC}"
 
-        if getent ahosts "$CHECK_DOMAIN" >/dev/null 2>&1; then
+    else
 
-            echo -e "${GREEN}DNS appears to resolve: $CHECK_DOMAIN${NC}"
-
-        else
-
-            echo -e "${YELLOW}WARNING: DNS does not currently resolve for $CHECK_DOMAIN${NC}"
-            echo
-            echo "Make sure this domain points to this server."
-            echo
-
-        fi
+        echo -e "${YELLOW}WARNING: DNS does not resolve: $D${NC}"
+        echo
+        echo "Make sure this domain points to this server."
+        echo
 
     fi
 
@@ -169,10 +179,12 @@ check_dns() {
 
 install_app() {
 
+    clear
+
     echo
-    echo "=========================================="
-    echo "             INSTALLATION"
-    echo "=========================================="
+    echo "=================================================="
+    echo "              SERVER INSTALLER"
+    echo "=================================================="
     echo
 
 
@@ -180,21 +192,22 @@ install_app() {
     # MAIN DOMAIN
     # ======================================================
 
-    echo "Enter the main domain."
+    echo "Enter MAIN domain."
     echo
     echo "Example:"
     echo "alpha.carselect.sbs"
     echo
 
-    read -p "Main domain: " DOMAIN
+    read -r -p "Main domain: " DOMAIN
 
     DOMAIN=$(clean_domain "$DOMAIN")
 
 
-    if ! validate_domain "$DOMAIN"; then
+    if ! valid_domain "$DOMAIN"; then
 
         echo
-        echo -e "${RED}Invalid main domain.${NC}"
+        echo -e "${RED}Invalid main domain:${NC}"
+        echo "$DOMAIN"
         echo
 
         exit 1
@@ -203,64 +216,63 @@ install_app() {
 
 
     # ======================================================
-    # SUB APPLICATION
+    # SUB INSTALL
     # ======================================================
 
-    INSTALL_SUB="no"
-    SUB_DOMAIN=""
-
-
     echo
-    echo "=========================================="
-    echo "          SUB APPLICATION"
-    echo "=========================================="
+    echo "=================================================="
+    echo "                 SUB APPLICATION"
+    echo "=================================================="
     echo
 
-    echo "Do you want to install the Sub application"
-    echo "on a separate domain?"
+    echo "Do you want to install the SUB application?"
+    echo
+    echo "If YES, you will enter a SECOND DOMAIN."
     echo
     echo "Example:"
     echo
-    echo "Main:"
+    echo "Main domain:"
     echo "  alpha.carselect.sbs"
     echo
-    echo "Sub:"
+    echo "Second domain:"
     echo "  sub.carselect.sbs"
     echo
     echo "Routing:"
     echo
-    echo "  https://alpha.carselect.sbs/*"
+    echo "  alpha.carselect.sbs/*"
     echo "        -> peak.sock"
     echo
-    echo "  https://sub.carselect.sbs/gx/*"
+    echo "  sub.carselect.sbs/gx/*"
     echo "        -> sub.sock"
+    echo
+    echo "  sub.carselect.sbs/*"
+    echo "        -> peak.sock"
     echo
 
 
-    read -p "Install Sub application? [y/N]: " SUB_CONFIRM
+    read -r -p "Install SUB application? [y/N]: " SUB_CONFIRM
 
 
     if [[ "$SUB_CONFIRM" =~ ^[Yy]$ ]]; then
 
         INSTALL_SUB="yes"
 
-
         echo
-        echo "=========================================="
-        echo "             SUB DOMAIN"
-        echo "=========================================="
+        echo "=================================================="
+        echo "                 SECOND DOMAIN"
+        echo "=================================================="
         echo
 
-
-        read -p "Sub domain: " SUB_DOMAIN
+        read -r -p "Second domain: " SUB_DOMAIN
 
         SUB_DOMAIN=$(clean_domain "$SUB_DOMAIN")
 
 
-        if ! validate_domain "$SUB_DOMAIN"; then
+        if ! valid_domain "$SUB_DOMAIN"; then
 
             echo
-            echo -e "${RED}Invalid Sub domain.${NC}"
+            echo -e "${RED}Invalid second domain:${NC}"
+            echo "$SUB_DOMAIN"
             echo
 
             exit 1
@@ -268,10 +280,10 @@ install_app() {
         fi
 
 
-        if [ "$SUB_DOMAIN" = "$DOMAIN" ]; then
+        if [ "$DOMAIN" = "$SUB_DOMAIN" ]; then
 
             echo
-            echo -e "${RED}Sub domain must be different from main domain.${NC}"
+            echo -e "${RED}Main domain and second domain cannot be the same.${NC}"
             echo
 
             exit 1
@@ -280,14 +292,16 @@ install_app() {
 
 
         echo
-        echo -e "${GREEN}Sub application enabled.${NC}"
+        echo -e "${GREEN}SUB application enabled.${NC}"
 
     else
 
         INSTALL_SUB="no"
 
+        SUB_DOMAIN=""
+
         echo
-        echo -e "${YELLOW}Sub application disabled.${NC}"
+        echo -e "${YELLOW}SUB application disabled.${NC}"
 
     fi
 
@@ -297,61 +311,60 @@ install_app() {
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "INSTALLATION SUMMARY"
-    echo "=========================================="
+    echo "=================================================="
+    echo "              INSTALLATION SUMMARY"
+    echo "=================================================="
     echo
 
-    echo -e "${GREEN}Main Domain:${NC}"
-    echo "$DOMAIN"
+    echo "Main domain:"
+    echo "  $DOMAIN"
 
+    echo
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
+        echo "Second domain:"
+        echo "  $SUB_DOMAIN"
+
         echo
-        echo -e "${GREEN}Sub Domain:${NC}"
-        echo "$SUB_DOMAIN"
+        echo "Routing:"
+        echo
+        echo "  https://$DOMAIN/*"
+        echo "      -> peak.sock"
+        echo
+        echo "  https://$SUB_DOMAIN/gx/*"
+        echo "      -> sub.sock"
+        echo
+        echo "  https://$SUB_DOMAIN/*"
+        echo "      -> peak.sock"
+
+    else
+
+        echo "Routing:"
+        echo
+        echo "  https://$DOMAIN/*"
+        echo "      -> peak.sock"
 
     fi
 
 
     echo
-    echo -e "${GREEN}GitHub:${NC}"
-    echo "$REPO"
-
-
+    echo "SSL:"
     echo
-    echo "=========================================="
-    echo "ROUTING"
-    echo "=========================================="
 
-
-    echo
-    echo "https://$DOMAIN/*"
-    echo "        -> peak.sock"
-
+    echo "  $DOMAIN"
 
     if [ "$INSTALL_SUB" = "yes" ]; then
-
-        echo
-        echo "https://$SUB_DOMAIN/gx/*"
-        echo "        -> sub.sock"
-
-        echo
-        echo "https://$SUB_DOMAIN/*"
-        echo "        -> peak.sock"
-
+        echo "  $SUB_DOMAIN"
     fi
 
-
     echo
-    echo "=========================================="
-    echo
-    echo "Continue installation?"
+    echo "IMPORTANT:"
+    echo "No www domain will be requested."
     echo
 
 
-    read -p "Continue? [y/N]: " CONFIRM
+    read -r -p "Continue installation? [y/N]: " CONFIRM
 
 
     if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
@@ -365,8 +378,13 @@ install_app() {
 
 
     # ======================================================
-    # DNS CHECK
+    # DNS
     # ======================================================
+
+    echo
+    echo "=================================================="
+    echo "                 DNS CHECK"
+    echo "=================================================="
 
     check_dns "$DOMAIN"
 
@@ -379,13 +397,14 @@ install_app() {
 
 
     echo
-    read -p "Continue even if DNS warning appears? [y/N]: " DNS_CONFIRM
+    read -r -p "Have DNS records been configured correctly? [y/N]: " DNS_CONFIRM
 
 
     if [[ ! "$DNS_CONFIRM" =~ ^[Yy]$ ]]; then
 
         echo
-        echo "Installation cancelled."
+        echo "Please configure DNS first."
+        echo
 
         exit 0
 
@@ -393,17 +412,16 @@ install_app() {
 
 
     # ======================================================
-    # UPDATE SYSTEM
+    # UPDATE
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "Updating system..."
-    echo "=========================================="
+    echo "=================================================="
+    echo "                 SYSTEM UPDATE"
+    echo "=================================================="
 
 
     apt update
-
 
     if [ $? -ne 0 ]; then
 
@@ -418,29 +436,28 @@ install_app() {
 
 
     # ======================================================
-    # INSTALL PACKAGES
+    # PACKAGES
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "Installing required packages..."
-    echo "=========================================="
+    echo "=================================================="
+    echo "              INSTALLING PACKAGES"
+    echo "=================================================="
 
 
-    apt install \
+    apt install -y \
         nginx \
         certbot \
-        python3-certbot-nginx \
         git \
+        python3 \
         python3-venv \
         python3-pip \
-        cron \
-        -y
+        cron
 
 
     if [ $? -ne 0 ]; then
 
-        echo -e "${RED}Required package installation failed.${NC}"
+        echo -e "${RED}Package installation failed.${NC}"
 
         exit 1
 
@@ -462,12 +479,6 @@ install_app() {
     # CRON
     # ======================================================
 
-    echo
-    echo "=========================================="
-    echo "Configuring Cron..."
-    echo "=========================================="
-
-
     systemctl enable cron
     systemctl start cron
 
@@ -483,19 +494,18 @@ install_app() {
 
 
     # ======================================================
-    # SSL MAIN DOMAIN
+    # SSL - MAIN DOMAIN
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "Getting SSL certificate"
-    echo "=========================================="
+    echo "=================================================="
+    echo "             SSL MAIN DOMAIN"
+    echo "=================================================="
     echo
 
-    echo "Domain:"
+    echo "Requesting certificate for:"
     echo "$DOMAIN"
     echo
-
 
     certbot certonly \
         --standalone \
@@ -508,13 +518,10 @@ install_app() {
     if [ $? -ne 0 ]; then
 
         echo
-        echo -e "${RED}SSL certificate installation failed for $DOMAIN.${NC}"
+        echo -e "${RED}SSL installation failed for:${NC}"
+        echo "$DOMAIN"
         echo
-        echo "Make sure:"
-        echo
-        echo "1. $DOMAIN points to this server."
-        echo "2. Port 80 is open."
-        echo "3. No other service is using port 80."
+        echo "Check DNS and port 80."
         echo
 
         exit 1
@@ -523,25 +530,24 @@ install_app() {
 
 
     echo
-    echo -e "${GREEN}SSL certificate installed successfully for $DOMAIN.${NC}"
+    echo -e "${GREEN}SSL installed for $DOMAIN${NC}"
 
 
     # ======================================================
-    # SSL SUB DOMAIN
+    # SSL - SECOND DOMAIN
     # ======================================================
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         echo
-        echo "=========================================="
-        echo "Getting SSL certificate for Sub domain"
-        echo "=========================================="
+        echo "=================================================="
+        echo "             SSL SECOND DOMAIN"
+        echo "=================================================="
         echo
 
-        echo "Sub domain:"
+        echo "Requesting certificate for:"
         echo "$SUB_DOMAIN"
         echo
-
 
         certbot certonly \
             --standalone \
@@ -554,13 +560,10 @@ install_app() {
         if [ $? -ne 0 ]; then
 
             echo
-            echo -e "${RED}SSL certificate installation failed for $SUB_DOMAIN.${NC}"
+            echo -e "${RED}SSL installation failed for:${NC}"
+            echo "$SUB_DOMAIN"
             echo
-            echo "Make sure:"
-            echo
-            echo "1. $SUB_DOMAIN points to this server."
-            echo "2. Port 80 is open."
-            echo "3. No other service is using port 80."
+            echo "Check DNS and port 80."
             echo
 
             exit 1
@@ -569,35 +572,32 @@ install_app() {
 
 
         echo
-        echo -e "${GREEN}SSL certificate installed successfully for $SUB_DOMAIN.${NC}"
+        echo -e "${GREEN}SSL installed for $SUB_DOMAIN${NC}"
 
     fi
 
 
     # ======================================================
-    # APPLICATION DIRECTORY
+    # APP DIRECTORY
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "Preparing application directory..."
-    echo "=========================================="
+    echo "=================================================="
+    echo "             APPLICATION DIRECTORY"
+    echo "=================================================="
 
-
-    rm -rf "$APP_DIR"
 
     mkdir -p /var/www
 
+    rm -rf "$APP_DIR"
+
 
     # ======================================================
-    # CLONE GITHUB
+    # CLONE
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "Cloning GitHub repository..."
-    echo "=========================================="
-
+    echo "Cloning repository..."
 
     git clone "$REPO" "$APP_DIR"
 
@@ -606,171 +606,63 @@ install_app() {
 
         echo
         echo -e "${RED}Git clone failed.${NC}"
-        echo
 
         exit 1
 
     fi
 
-
-    # ======================================================
-    # PROJECT
-    # ======================================================
 
     cd "$APP_DIR"
 
 
-    echo
-    echo "Project files:"
-    echo
-
-    ls -la
-
-    echo
-
-
     # ======================================================
-    # CHECK APP.PY
-    # ======================================================
-
-    if [ ! -f "$APP_DIR/app.py" ]; then
-
-        echo -e "${RED}ERROR: app.py not found.${NC}"
-
-        exit 1
-
-    fi
-
-
-    echo -e "${GREEN}app.py found.${NC}"
-
-
-    # ======================================================
-    # CHECK TEL.PY
+    # FILE CHECK
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "Checking tel.py..."
-    echo "=========================================="
+    echo "=================================================="
+    echo "                 FILE CHECK"
+    echo "=================================================="
 
 
-    if [ ! -f "$APP_DIR/tel.py" ]; then
-
-        echo -e "${RED}ERROR: tel.py not found.${NC}"
-
-        exit 1
-
-    fi
-
-
-    echo -e "${GREEN}tel.py found.${NC}"
+    REQUIRED_FILES=(
+        "app.py"
+        "tel.py"
+        "backup.py"
+        "trade.py"
+        "currencies.json"
+    )
 
 
-    # ======================================================
-    # CHECK BACKUP.PY
-    # ======================================================
+    for FILE in "${REQUIRED_FILES[@]}"
+    do
 
-    echo
-    echo "=========================================="
-    echo "Checking backup.py..."
-    echo "=========================================="
+        if [ ! -f "$APP_DIR/$FILE" ]; then
 
-
-    if [ ! -f "$BACKUP_SCRIPT" ]; then
-
-        echo -e "${RED}ERROR: backup.py not found.${NC}"
-        echo
-        echo "Expected:"
-        echo "$BACKUP_SCRIPT"
-        echo
-
-        exit 1
-
-    fi
-
-
-    echo -e "${GREEN}backup.py found.${NC}"
-
-
-    # ======================================================
-    # CHECK TRADE.PY
-    # ======================================================
-
-    echo
-    echo "=========================================="
-    echo "Checking trade.py..."
-    echo "=========================================="
-
-
-    if [ ! -f "$TRADE_SCRIPT" ]; then
-
-        echo -e "${RED}ERROR: trade.py not found.${NC}"
-        echo
-        echo "Expected:"
-        echo "$TRADE_SCRIPT"
-        echo
-
-        exit 1
-
-    fi
-
-
-    echo -e "${GREEN}trade.py found.${NC}"
-
-
-    # ======================================================
-    # CHECK CURRENCIES.JSON
-    # ======================================================
-
-    echo
-    echo "=========================================="
-    echo "Checking currencies.json..."
-    echo "=========================================="
-
-
-    if [ ! -f "$CURRENCIES_FILE" ]; then
-
-        echo -e "${RED}ERROR: currencies.json not found.${NC}"
-        echo
-        echo "Expected:"
-        echo "$CURRENCIES_FILE"
-        echo
-
-        exit 1
-
-    fi
-
-
-    echo -e "${GREEN}currencies.json found.${NC}"
-
-
-    # ======================================================
-    # CHECK SUB.PY
-    # ======================================================
-
-    if [ "$INSTALL_SUB" = "yes" ]; then
-
-        echo
-        echo "=========================================="
-        echo "Checking sub.py..."
-        echo "=========================================="
-
-
-        if [ ! -f "$APP_DIR/sub.py" ]; then
-
-            echo -e "${RED}ERROR: sub.py not found.${NC}"
             echo
-            echo "Sub installation was enabled."
-            echo
-            echo "Expected:"
-            echo "$APP_DIR/sub.py"
+            echo -e "${RED}Missing file: $FILE${NC}"
             echo
 
             exit 1
 
         fi
 
+        echo -e "${GREEN}$FILE found.${NC}"
+
+    done
+
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        if [ ! -f "$APP_DIR/sub.py" ]; then
+
+            echo
+            echo -e "${RED}Missing file: sub.py${NC}"
+            echo
+
+            exit 1
+
+        fi
 
         echo -e "${GREEN}sub.py found.${NC}"
 
@@ -778,39 +670,28 @@ install_app() {
 
 
     # ======================================================
-    # CREATE VENV
+    # VENV
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "Creating Python virtual environment..."
-    echo "=========================================="
+    echo "=================================================="
+    echo "             PYTHON VIRTUAL ENV"
+    echo "=================================================="
 
 
     rm -rf "$VENV"
-
 
     python3 -m venv "$VENV"
 
 
     if [ ! -f "$VENV/bin/python" ]; then
 
-        echo -e "${RED}Python virtual environment creation failed.${NC}"
+        echo
+        echo -e "${RED}Virtual environment creation failed.${NC}"
 
         exit 1
 
     fi
-
-
-    echo -e "${GREEN}Virtual environment created.${NC}"
-
-
-    # ======================================================
-    # PIP
-    # ======================================================
-
-    echo
-    echo "Upgrading pip..."
 
 
     "$VENV/bin/python" -m pip install --upgrade pip
@@ -818,6 +699,7 @@ install_app() {
 
     if [ $? -ne 0 ]; then
 
+        echo
         echo -e "${RED}pip upgrade failed.${NC}"
 
         exit 1
@@ -830,9 +712,9 @@ install_app() {
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "Installing Python packages..."
-    echo "=========================================="
+    echo "=================================================="
+    echo "             PYTHON PACKAGES"
+    echo "=================================================="
 
 
     "$VENV/bin/pip" install \
@@ -859,22 +741,17 @@ install_app() {
     fi
 
 
-    echo -e "${GREEN}Python packages installed.${NC}"
-
-
     # ======================================================
     # PEAK SERVICE
     # ======================================================
 
     echo
-    echo "=========================================="
     echo "Creating peak.service..."
-    echo "=========================================="
 
 
     cat > "$PEAK_SERVICE" <<EOF
 [Unit]
-Description=Gunicorn instance to serve Flask app
+Description=Peak Gunicorn Application
 After=network.target
 
 [Service]
@@ -882,7 +759,13 @@ User=root
 Group=www-data
 WorkingDirectory=$APP_DIR
 Environment="PATH=$VENV/bin"
-ExecStart=$VENV/bin/gunicorn --workers 3 --bind unix:$APP_DIR/peak.sock app:app
+Environment="PYTHONUNBUFFERED=1"
+
+ExecStart=$VENV/bin/gunicorn \
+    --workers 3 \
+    --bind unix:$APP_DIR/peak.sock \
+    app:app
+
 Restart=always
 RestartSec=5
 
@@ -896,24 +779,25 @@ EOF
     # ======================================================
 
     echo
-    echo "=========================================="
     echo "Creating bot.service..."
-    echo "=========================================="
 
 
     cat > "$BOT_SERVICE" <<EOF
 [Unit]
-Description=Telegram Bot Service
+Description=Telegram Bot
 After=network.target
 
 [Service]
 User=root
 Group=www-data
 WorkingDirectory=$APP_DIR
+Environment="PATH=$VENV/bin"
+Environment="PYTHONUNBUFFERED=1"
+
 ExecStart=$VENV/bin/python $APP_DIR/tel.py
+
 Restart=always
 RestartSec=5
-Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
@@ -925,24 +809,25 @@ EOF
     # ======================================================
 
     echo
-    echo "=========================================="
     echo "Creating trade.service..."
-    echo "=========================================="
 
 
     cat > "$TRADE_SERVICE" <<EOF
 [Unit]
-Description=Trade Telegram Bot Service
+Description=Trade Telegram Bot
 After=network.target
 
 [Service]
 User=root
 Group=www-data
 WorkingDirectory=$APP_DIR
+Environment="PATH=$VENV/bin"
+Environment="PYTHONUNBUFFERED=1"
+
 ExecStart=$VENV/bin/python $APP_DIR/trade.py
+
 Restart=always
 RestartSec=5
-Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
@@ -956,14 +841,12 @@ EOF
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         echo
-        echo "=========================================="
         echo "Creating sub.service..."
-        echo "=========================================="
 
 
         cat > "$SUB_SERVICE" <<EOF
 [Unit]
-Description=Sub Application Service
+Description=Sub Gunicorn Application
 After=network.target
 
 [Service]
@@ -971,7 +854,13 @@ User=root
 Group=www-data
 WorkingDirectory=$APP_DIR
 Environment="PATH=$VENV/bin"
-ExecStart=$VENV/bin/gunicorn --workers 3 --bind unix:$APP_DIR/sub.sock sub:app
+Environment="PYTHONUNBUFFERED=1"
+
+ExecStart=$VENV/bin/gunicorn \
+    --workers 3 \
+    --bind unix:$APP_DIR/sub.sock \
+    sub:app
+
 Restart=always
 RestartSec=5
 
@@ -987,13 +876,13 @@ EOF
 
 
     # ======================================================
-    # SYSTEMD RELOAD
+    # SYSTEMD
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "Configuring systemd..."
-    echo "=========================================="
+    echo "=================================================="
+    echo "                 SYSTEMD"
+    echo "=================================================="
 
 
     systemctl daemon-reload
@@ -1012,36 +901,28 @@ EOF
 
 
     # ======================================================
-    # BACKUP CRON
+    # CRON
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "Configuring backup cron..."
-    echo "=========================================="
+    echo "=================================================="
+    echo "                 BACKUP CRON"
+    echo "=================================================="
 
 
     crontab -l 2>/dev/null \
-        | grep -v "$BACKUP_SCRIPT" \
-        | grep -v "$TRADE_SCRIPT" \
-        > /tmp/current_cron 2>/dev/null || true
+        | grep -vF "$BACKUP_SCRIPT" \
+        | grep -vF "$TRADE_SCRIPT" \
+        > /tmp/bot_cron 2>/dev/null || true
 
 
     echo "0 0 * * * $VENV/bin/python $BACKUP_SCRIPT >> $BACKUP_LOG 2>&1" \
-        >> /tmp/current_cron
+        >> /tmp/bot_cron
 
 
-    crontab /tmp/current_cron
+    crontab /tmp/bot_cron
 
-    rm -f /tmp/current_cron
-
-
-    echo
-    echo -e "${GREEN}Backup cron installed.${NC}"
-
-    echo
-    echo "Backup schedule:"
-    echo "Every day at 00:00"
+    rm -f /tmp/bot_cron
 
 
     # ======================================================
@@ -1049,19 +930,22 @@ EOF
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "Creating Nginx configuration..."
-    echo "=========================================="
+    echo "=================================================="
+    echo "                 NGINX"
+    echo "=================================================="
+
+
+    rm -f /etc/nginx/sites-enabled/default
+    rm -f "$NGINX_ENABLED"
 
 
     # ======================================================
-    # MAIN DOMAIN
+    # MAIN DOMAIN NGINX
     # ======================================================
 
-    cat > "$NGINX_CONFIG" <<EOF
-
+    cat > "$NGINX_AVAILABLE" <<EOF
 # ==========================================================
-# MAIN DOMAIN - HTTP
+# MAIN DOMAIN HTTP
 # ==========================================================
 
 server {
@@ -1071,12 +955,11 @@ server {
     server_name $DOMAIN;
 
     return 301 https://\$host\$request_uri;
-
 }
 
 
 # ==========================================================
-# MAIN DOMAIN - HTTPS
+# MAIN DOMAIN HTTPS
 # ==========================================================
 
 server {
@@ -1093,36 +976,31 @@ server {
 
     ssl_protocols TLSv1.2 TLSv1.3;
 
-    ssl_ciphers HIGH:!aNULL:!MD5;
-
-
-    # ======================================================
-    # EVERYTHING -> PEAK
-    # ======================================================
 
     location / {
 
         include proxy_params;
 
-        proxy_pass http://unix:$APP_DIR/peak.sock:;
+        proxy_pass http://unix:$APP_DIR/peak.sock;
 
     }
-
-}
 
 EOF
 
 
     # ======================================================
-    # SUB DOMAIN
+    # SECOND DOMAIN
     # ======================================================
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
-        cat >> "$NGINX_CONFIG" <<EOF
+        cat >> "$NGINX_AVAILABLE" <<EOF
+
+}
+
 
 # ==========================================================
-# SUB DOMAIN - HTTP
+# SECOND DOMAIN HTTP
 # ==========================================================
 
 server {
@@ -1132,12 +1010,11 @@ server {
     server_name $SUB_DOMAIN;
 
     return 301 https://\$host\$request_uri;
-
 }
 
 
 # ==========================================================
-# SUB DOMAIN - HTTPS
+# SECOND DOMAIN HTTPS
 # ==========================================================
 
 server {
@@ -1154,18 +1031,16 @@ server {
 
     ssl_protocols TLSv1.2 TLSv1.3;
 
-    ssl_ciphers HIGH:!aNULL:!MD5;
-
 
     # ======================================================
-    # GX -> SUB
+    # /gx/ -> SUB
     # ======================================================
 
     location /gx/ {
 
         include proxy_params;
 
-        proxy_pass http://unix:$APP_DIR/sub.sock:;
+        proxy_pass http://unix:$APP_DIR/sub.sock;
 
     }
 
@@ -1178,9 +1053,17 @@ server {
 
         include proxy_params;
 
-        proxy_pass http://unix:$APP_DIR/peak.sock:;
+        proxy_pass http://unix:$APP_DIR/peak.sock;
 
     }
+
+}
+
+EOF
+
+    else
+
+        cat >> "$NGINX_AVAILABLE" <<EOF
 
 }
 
@@ -1190,23 +1073,10 @@ EOF
 
 
     # ======================================================
-    # NGINX ENABLE
+    # ENABLE NGINX
     # ======================================================
 
-    echo
-    echo "=========================================="
-    echo "Enabling Nginx configuration..."
-    echo "=========================================="
-
-
-    rm -f /etc/nginx/sites-enabled/default
-
-    rm -f /etc/nginx/sites-enabled/nginx.conf
-
-
-    ln -s \
-        /etc/nginx/sites-available/nginx.conf \
-        /etc/nginx/sites-enabled/nginx.conf
+    ln -sf "$NGINX_AVAILABLE" "$NGINX_ENABLED"
 
 
     # ======================================================
@@ -1214,9 +1084,7 @@ EOF
     # ======================================================
 
     echo
-    echo "=========================================="
     echo "Setting permissions..."
-    echo "=========================================="
 
 
     chown -R root:www-data "$APP_DIR"
@@ -1229,9 +1097,7 @@ EOF
     # ======================================================
 
     echo
-    echo "=========================================="
     echo "Testing Nginx..."
-    echo "=========================================="
 
 
     nginx -t
@@ -1240,7 +1106,10 @@ EOF
     if [ $? -ne 0 ]; then
 
         echo
-        echo -e "${RED}Nginx configuration test failed.${NC}"
+        echo -e "${RED}Nginx configuration test FAILED.${NC}"
+        echo
+        echo "Configuration:"
+        echo "$NGINX_AVAILABLE"
         echo
 
         exit 1
@@ -1253,53 +1122,37 @@ EOF
 
 
     # ======================================================
-    # START PEAK
+    # START SERVICES
     # ======================================================
 
     echo
-    echo "Starting peak..."
-
+    echo "Starting Peak..."
 
     systemctl restart peak
 
     sleep 2
 
 
-    # ======================================================
-    # START BOT
-    # ======================================================
-
     echo
-    echo "Starting bot..."
-
+    echo "Starting Bot..."
 
     systemctl restart bot
 
     sleep 2
 
 
-    # ======================================================
-    # START TRADE
-    # ======================================================
-
     echo
-    echo "Starting trade..."
-
+    echo "Starting Trade..."
 
     systemctl restart trade
 
     sleep 2
 
 
-    # ======================================================
-    # START SUB
-    # ======================================================
-
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         echo
-        echo "Starting sub..."
-
+        echo "Starting Sub..."
 
         systemctl restart sub
 
@@ -1309,7 +1162,7 @@ EOF
 
 
     # ======================================================
-    # START NGINX
+    # NGINX
     # ======================================================
 
     echo
@@ -1322,26 +1175,23 @@ EOF
 
 
     # ======================================================
-    # CERTBOT AUTO RENEWAL
+    # CERTBOT TIMER
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo "Configuring SSL auto renewal..."
-    echo "=========================================="
+    echo "Enabling Certbot renewal..."
 
 
     systemctl enable certbot.timer
-
     systemctl start certbot.timer
 
 
     # ======================================================
-    # RENEWAL TEST
+    # FINAL RENEWAL TEST
     # ======================================================
 
     echo
-    echo "Testing SSL renewal..."
+    echo "Testing Certbot renewal..."
 
 
     certbot renew --dry-run || true
@@ -1349,119 +1199,84 @@ EOF
 
     # ======================================================
     # FINAL STATUS
-    # ==========================================================
+    # ======================================================
 
     echo
     echo
-    echo "=========================================="
-    echo -e "${GREEN}INSTALLATION FINISHED${NC}"
-    echo "=========================================="
+    echo "=================================================="
+    echo -e "${GREEN}             INSTALLATION COMPLETE${NC}"
+    echo "=================================================="
     echo
 
 
-    echo -e "${BLUE}Main Website:${NC}"
+    echo "MAIN DOMAIN:"
+    echo
     echo "https://$DOMAIN"
 
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         echo
-        echo -e "${BLUE}Sub Website:${NC}"
+        echo "SECOND DOMAIN:"
+        echo
         echo "https://$SUB_DOMAIN/gx/"
 
     fi
 
 
     echo
-    echo -e "${BLUE}Application:${NC}"
-    echo "$APP_DIR"
-
-
-    echo
-    echo -e "${BLUE}GitHub:${NC}"
-    echo "$REPO"
-
-
-    # ======================================================
-    # ROUTING
-    # ======================================================
-
-    echo
-    echo "=========================================="
+    echo "=================================================="
     echo "ROUTING"
-    echo "=========================================="
+    echo "=================================================="
 
 
     echo
-    echo "https://$DOMAIN/*"
-    echo "        -> peak.sock"
+    echo "$DOMAIN/*"
+    echo "    -> peak.sock"
 
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         echo
-        echo "https://$SUB_DOMAIN/gx/*"
-        echo "        -> sub.sock"
+        echo "$SUB_DOMAIN/gx/*"
+        echo "    -> sub.sock"
 
         echo
-        echo "https://$SUB_DOMAIN/*"
-        echo "        -> peak.sock"
+        echo "$SUB_DOMAIN/*"
+        echo "    -> peak.sock"
 
     fi
 
 
-    # ======================================================
-    # SSL
-    # ======================================================
-
     echo
-    echo "=========================================="
+    echo "=================================================="
     echo "SSL"
-    echo "=========================================="
+    echo "=================================================="
 
 
     echo
-    echo "Main SSL:"
+    echo "Certificate:"
     echo "/etc/letsencrypt/live/$DOMAIN/"
 
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         echo
-        echo "Sub SSL:"
+        echo "Certificate:"
         echo "/etc/letsencrypt/live/$SUB_DOMAIN/"
 
     fi
 
 
     echo
-    echo "Auto renewal:"
-    echo "ENABLED"
+    echo "IMPORTANT:"
+    echo "No www certificate was requested."
 
 
     echo
-    echo "Check renewal timer:"
-    echo "systemctl status certbot.timer"
-
-
-    echo
-    echo "Manual renewal:"
-    echo "certbot renew"
-
-
-    echo
-    echo "Test renewal:"
-    echo "certbot renew --dry-run"
-
-
-    # ======================================================
-    # SERVICES
-    # ======================================================
-
-    echo
-    echo "=========================================="
+    echo "=================================================="
     echo "SERVICES"
-    echo "=========================================="
+    echo "=================================================="
 
 
     echo
@@ -1488,14 +1303,10 @@ EOF
     fi
 
 
-    # ======================================================
-    # LOGS
-    # ======================================================
-
     echo
-    echo "=========================================="
+    echo "=================================================="
     echo "LOGS"
-    echo "=========================================="
+    echo "=================================================="
 
 
     echo
@@ -1523,13 +1334,13 @@ EOF
 
 
     echo
-    echo "=========================================="
+    echo "=================================================="
     echo -e "${GREEN}DONE${NC}"
-    echo "=========================================="
+    echo "=================================================="
     echo
 
 
-    read -p "Press Enter to exit..."
+    read -r -p "Press Enter to exit..."
 
 }
 
@@ -1540,23 +1351,24 @@ EOF
 
 remove_app() {
 
+    clear
+
     echo
-    echo "=========================================="
-    echo "          REMOVE EVERYTHING"
-    echo "=========================================="
+    echo "=================================================="
+    echo "              REMOVE EVERYTHING"
+    echo "=================================================="
     echo
 
 
-    read -p "Enter main domain: " DOMAIN
+    read -r -p "Main domain: " DOMAIN
 
     DOMAIN=$(clean_domain "$DOMAIN")
 
 
-    if ! validate_domain "$DOMAIN"; then
+    if ! valid_domain "$DOMAIN"; then
 
         echo
-        echo -e "${RED}Invalid main domain.${NC}"
-        echo
+        echo -e "${RED}Invalid domain.${NC}"
 
         exit 1
 
@@ -1564,61 +1376,64 @@ remove_app() {
 
 
     echo
-    echo -e "${YELLOW}WARNING!${NC}"
-    echo
-    echo "The following will be removed:"
-    echo
-    echo "  $APP_DIR"
-    echo "  peak.service"
-    echo "  bot.service"
-    echo "  trade.service"
-    echo "  sub.service"
-    echo "  Nginx configuration"
-    echo "  SSL certificate for $DOMAIN"
-    echo "  Backup cron job"
-    echo "  Backup log"
-    echo "  Trade log"
-    echo
+    read -r -p "Do you also have a second domain? [y/N]: " REMOVE_SUB
 
 
-    REMOVE_SUB_SSL="no"
     REMOVE_SUB_DOMAIN=""
-
-
-    read -p "Remove a Sub domain SSL too? [y/N]: " REMOVE_SUB
 
 
     if [[ "$REMOVE_SUB" =~ ^[Yy]$ ]]; then
 
-        REMOVE_SUB_SSL="yes"
-
-
-        echo
-        read -p "Enter Sub domain: " REMOVE_SUB_DOMAIN
+        read -r -p "Second domain: " REMOVE_SUB_DOMAIN
 
         REMOVE_SUB_DOMAIN=$(clean_domain "$REMOVE_SUB_DOMAIN")
 
 
-        if ! validate_domain "$REMOVE_SUB_DOMAIN"; then
+        if ! valid_domain "$REMOVE_SUB_DOMAIN"; then
 
             echo
-            echo -e "${RED}Invalid Sub domain.${NC}"
-            echo
+            echo -e "${RED}Invalid second domain.${NC}"
 
             exit 1
 
         fi
 
+    fi
 
-        echo
-        echo "Sub SSL that will be removed:"
-        echo "$REMOVE_SUB_DOMAIN"
+
+    echo
+    echo "=================================================="
+    echo "WARNING"
+    echo "=================================================="
+    echo
+
+    echo "The following will be removed:"
+    echo
+    echo "$APP_DIR"
+    echo "$PEAK_SERVICE"
+    echo "$BOT_SERVICE"
+    echo "$TRADE_SERVICE"
+    echo "$SUB_SERVICE"
+    echo "$NGINX_AVAILABLE"
+    echo "$NGINX_ENABLED"
+    echo "SSL: $DOMAIN"
+
+
+    if [ -n "$REMOVE_SUB_DOMAIN" ]; then
+
+        echo "SSL: $REMOVE_SUB_DOMAIN"
 
     fi
 
 
     echo
-    read -p "Type YES to continue: " CONFIRM
+    echo "Backup cron"
+    echo "Backup log"
+    echo "Trade log"
+    echo
+
+
+    read -r -p "Type YES to continue: " CONFIRM
 
 
     if [ "$CONFIRM" != "YES" ]; then
@@ -1632,7 +1447,7 @@ remove_app() {
 
 
     # ======================================================
-    # STOP SERVICES
+    # STOP
     # ======================================================
 
     echo
@@ -1646,7 +1461,7 @@ remove_app() {
 
 
     # ======================================================
-    # DISABLE SERVICES
+    # DISABLE
     # ======================================================
 
     echo
@@ -1660,7 +1475,7 @@ remove_app() {
 
 
     # ======================================================
-    # REMOVE SYSTEMD FILES
+    # SYSTEMD FILES
     # ======================================================
 
     echo
@@ -1679,26 +1494,26 @@ remove_app() {
 
 
     # ======================================================
-    # REMOVE CRON
+    # CRON
     # ======================================================
 
     echo
-    echo "Removing cron jobs..."
+    echo "Removing cron..."
 
 
     crontab -l 2>/dev/null \
-        | grep -v "$BACKUP_SCRIPT" \
-        | grep -v "$TRADE_SCRIPT" \
-        > /tmp/current_cron 2>/dev/null || true
+        | grep -vF "$BACKUP_SCRIPT" \
+        | grep -vF "$TRADE_SCRIPT" \
+        > /tmp/bot_remove_cron 2>/dev/null || true
 
 
-    crontab /tmp/current_cron 2>/dev/null || true
+    crontab /tmp/bot_remove_cron 2>/dev/null || true
 
-    rm -f /tmp/current_cron
+    rm -f /tmp/bot_remove_cron
 
 
     # ======================================================
-    # REMOVE LOGS
+    # LOGS
     # ======================================================
 
     echo
@@ -1710,19 +1525,19 @@ remove_app() {
 
 
     # ======================================================
-    # REMOVE NGINX CONFIG
+    # NGINX
     # ======================================================
 
     echo
     echo "Removing Nginx configuration..."
 
 
-    rm -f /etc/nginx/sites-enabled/nginx.conf
-    rm -f /etc/nginx/sites-available/nginx.conf
+    rm -f "$NGINX_ENABLED"
+    rm -f "$NGINX_AVAILABLE"
 
 
     # ======================================================
-    # REMOVE APPLICATION
+    # APPLICATION
     # ======================================================
 
     echo
@@ -1733,39 +1548,41 @@ remove_app() {
 
 
     # ======================================================
-    # REMOVE MAIN SSL
+    # MAIN SSL
     # ======================================================
 
     echo
-    echo "Removing SSL certificate for:"
+    echo "Removing SSL:"
     echo "$DOMAIN"
 
 
     certbot delete \
         --cert-name "$DOMAIN" \
-        --non-interactive 2>/dev/null || true
+        --non-interactive \
+        2>/dev/null || true
 
 
     # ======================================================
-    # REMOVE SUB SSL
+    # SECOND SSL
     # ======================================================
 
-    if [ "$REMOVE_SUB_SSL" = "yes" ]; then
+    if [ -n "$REMOVE_SUB_DOMAIN" ]; then
 
         echo
-        echo "Removing SSL certificate for:"
+        echo "Removing SSL:"
         echo "$REMOVE_SUB_DOMAIN"
 
 
         certbot delete \
             --cert-name "$REMOVE_SUB_DOMAIN" \
-            --non-interactive 2>/dev/null || true
+            --non-interactive \
+            2>/dev/null || true
 
     fi
 
 
     # ======================================================
-    # RESTART NGINX
+    # NGINX TEST / RESTART
     # ======================================================
 
     if nginx -t >/dev/null 2>&1; then
@@ -1780,13 +1597,13 @@ remove_app() {
     # ======================================================
 
     echo
-    echo "=========================================="
-    echo -e "${GREEN}REMOVAL COMPLETED${NC}"
-    echo "=========================================="
+    echo "=================================================="
+    echo -e "${GREEN}             REMOVAL COMPLETE${NC}"
+    echo "=================================================="
     echo
 
 
-    read -p "Press Enter to exit..."
+    read -r -p "Press Enter to exit..."
 
 }
 
@@ -1800,18 +1617,18 @@ do
 
     clear
 
-    echo "=========================================="
-    echo "            SERVER INSTALLER"
-    echo "=========================================="
+    echo
+    echo "=================================================="
+    echo "                SERVER INSTALLER"
+    echo "=================================================="
     echo
 
     echo "1) Install"
     echo "2) Remove everything"
     echo "3) Exit"
-
     echo
 
-    read -p "Select option [1-3]: " OPTION
+    read -r -p "Select option [1-3]: " OPTION
 
 
     case "$OPTION" in
@@ -1848,6 +1665,7 @@ do
 
             echo
             echo -e "${RED}Invalid option.${NC}"
+            echo
 
             sleep 2
 
