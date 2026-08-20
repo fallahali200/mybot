@@ -30,6 +30,10 @@ TRADE_LOG="/var/log/bot-trade.log"
 
 CURRENCIES_FILE="$APP_DIR/currencies.json"
 
+DOMAIN=""
+SUB_DOMAIN=""
+INSTALL_SUB="no"
+
 
 # ==========================================================
 # COLORS
@@ -66,15 +70,16 @@ fi
 
 clean_domain() {
 
-    local DOMAIN="$1"
+    local DOMAIN_INPUT="$1"
 
-    DOMAIN=$(echo "$DOMAIN" \
+    DOMAIN_INPUT=$(echo "$DOMAIN_INPUT" \
         | sed 's#https://##' \
         | sed 's#http://##' \
         | sed 's#/$##' \
         | sed 's/[[:space:]]//g')
 
-    echo "$DOMAIN"
+    echo "$DOMAIN_INPUT"
+
 }
 
 
@@ -93,6 +98,34 @@ check_command() {
         exit 1
 
     fi
+
+}
+
+
+# ==========================================================
+# VALIDATE DOMAIN
+# ==========================================================
+
+validate_domain() {
+
+    local DOMAIN_INPUT="$1"
+
+    if [ -z "$DOMAIN_INPUT" ]; then
+
+        return 1
+
+    fi
+
+
+    if [[ ! "$DOMAIN_INPUT" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]]; then
+
+        return 1
+
+    fi
+
+
+    return 0
+
 }
 
 
@@ -113,14 +146,16 @@ install_app() {
     # MAIN DOMAIN
     # ======================================================
 
-    read -p "Enter your domain: " DOMAIN
+    read -p "Enter your main domain: " DOMAIN
 
     DOMAIN=$(clean_domain "$DOMAIN")
 
 
-    if [ -z "$DOMAIN" ]; then
+    if ! validate_domain "$DOMAIN"; then
 
-        echo -e "${RED}Domain cannot be empty.${NC}"
+        echo
+        echo -e "${RED}Invalid main domain.${NC}"
+        echo
 
         exit 1
 
@@ -132,6 +167,7 @@ install_app() {
     # ======================================================
 
     INSTALL_SUB="no"
+    SUB_DOMAIN=""
 
 
     echo
@@ -140,14 +176,25 @@ install_app() {
     echo "=========================================="
     echo
 
-    echo "Do you want to install the Sub application"
-    echo "on this server?"
+    echo "Do you want to install the Sub application?"
     echo
-    echo "If YES:"
+    echo "If YES, a second domain will be requested."
     echo
-    echo "  $DOMAIN/gx/ -> sub.sock"
+    echo "Example:"
     echo
-    echo "All other URLs -> peak.sock"
+    echo "Main domain:"
+    echo "  example.com"
+    echo
+    echo "Sub domain:"
+    echo "  sub.example.com"
+    echo
+    echo "Routing:"
+    echo
+    echo "  https://example.com/*"
+    echo "        -> peak.sock"
+    echo
+    echo "  https://sub.example.com/gx/*"
+    echo "        -> sub.sock"
     echo
 
 
@@ -158,11 +205,52 @@ install_app() {
 
         INSTALL_SUB="yes"
 
+
+        echo
+        echo "=========================================="
+        echo "             SUB DOMAIN"
+        echo "=========================================="
+        echo
+
+
+        read -p "Enter Sub domain: " SUB_DOMAIN
+
+        SUB_DOMAIN=$(clean_domain "$SUB_DOMAIN")
+
+
+        if ! validate_domain "$SUB_DOMAIN"; then
+
+            echo
+            echo -e "${RED}Invalid Sub domain.${NC}"
+            echo
+
+            exit 1
+
+        fi
+
+
+        if [ "$SUB_DOMAIN" = "$DOMAIN" ]; then
+
+            echo
+            echo -e "${RED}Sub domain must be different from main domain.${NC}"
+            echo
+
+            exit 1
+
+        fi
+
+
         echo
         echo -e "${GREEN}Sub application enabled.${NC}"
         echo
-        echo "$DOMAIN/gx/ -> sub.sock"
-        echo "Everything else -> peak.sock"
+        echo "Main domain:"
+        echo "  https://$DOMAIN/*"
+        echo "        -> peak.sock"
+        echo
+        echo "Sub domain:"
+        echo "  https://$SUB_DOMAIN/gx/*"
+        echo "        -> sub.sock"
+
 
     else
 
@@ -186,18 +274,23 @@ install_app() {
     echo "=========================================="
     echo
 
-    echo -e "${GREEN}Domain:${NC} $DOMAIN"
+    echo -e "${GREEN}Main Domain:${NC} $DOMAIN"
     echo -e "${GREEN}GitHub:${NC} $REPO"
 
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
+        echo
         echo -e "${GREEN}Sub:${NC} ENABLED"
-        echo -e "${GREEN}Sub URL:${NC} https://$DOMAIN/gx/"
+        echo -e "${GREEN}Main URL:${NC} https://$DOMAIN/"
+        echo -e "${GREEN}Main socket:${NC} $APP_DIR/peak.sock"
+        echo -e "${GREEN}Sub domain:${NC} https://$SUB_DOMAIN/"
+        echo -e "${GREEN}Sub URL:${NC} https://$SUB_DOMAIN/gx/"
         echo -e "${GREEN}Sub socket:${NC} $APP_DIR/sub.sock"
 
     else
 
+        echo
         echo -e "${YELLOW}Sub:${NC} DISABLED"
 
     fi
@@ -231,6 +324,7 @@ install_app() {
 
 
     apt update
+
 
     if [ $? -ne 0 ]; then
 
@@ -310,7 +404,7 @@ install_app() {
 
 
     # ======================================================
-    # SSL CERTIFICATE
+    # SSL MAIN DOMAIN
     # ======================================================
 
     echo
@@ -319,7 +413,7 @@ install_app() {
     echo "=========================================="
     echo
 
-    echo "Domain:"
+    echo "Main domain:"
     echo "$DOMAIN"
     echo
 
@@ -336,7 +430,7 @@ install_app() {
     if [ $? -ne 0 ]; then
 
         echo
-        echo -e "${RED}SSL certificate installation failed.${NC}"
+        echo -e "${RED}SSL certificate installation failed for $DOMAIN.${NC}"
         echo
         echo "Make sure:"
         echo
@@ -352,7 +446,55 @@ install_app() {
 
 
     echo
-    echo -e "${GREEN}SSL certificate installed successfully.${NC}"
+    echo -e "${GREEN}SSL certificate for main domain installed successfully.${NC}"
+
+
+    # ======================================================
+    # SSL SUB DOMAIN
+    # ======================================================
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo "=========================================="
+        echo "Getting SSL certificate for Sub domain..."
+        echo "=========================================="
+        echo
+
+        echo "Sub domain:"
+        echo "$SUB_DOMAIN"
+        echo
+
+
+        certbot certonly \
+            --standalone \
+            --agree-tos \
+            --register-unsafely-without-email \
+            --non-interactive \
+            -d "$SUB_DOMAIN"
+
+
+        if [ $? -ne 0 ]; then
+
+            echo
+            echo -e "${RED}SSL certificate installation failed for $SUB_DOMAIN.${NC}"
+            echo
+            echo "Make sure:"
+            echo
+            echo "1. $SUB_DOMAIN points to this server."
+            echo "2. Port 80 is open."
+            echo "3. No other service is using port 80."
+            echo
+
+            exit 1
+
+        fi
+
+
+        echo
+        echo -e "${GREEN}SSL certificate for Sub domain installed successfully.${NC}"
+
+    fi
 
 
     # ======================================================
@@ -826,7 +968,7 @@ EOF
 
 
     # ======================================================
-    # NGINX CONFIG
+    # NGINX CONFIGURATION
     # ======================================================
 
     echo
@@ -835,30 +977,34 @@ EOF
     echo "=========================================="
 
 
+    # ======================================================
+    # MAIN DOMAIN HTTP
+    # ======================================================
+
     cat > "$NGINX_CONFIG" <<EOF
 # ==========================================================
-# HTTP
+# MAIN DOMAIN - HTTP
 # ==========================================================
 
 server {
 
-    listen 80 default_server;
+    listen 80;
 
-    server_name _;
+    server_name $DOMAIN www.$DOMAIN;
 
     return 301 https://\$host\$request_uri;
 }
 
 
 # ==========================================================
-# HTTPS
+# MAIN DOMAIN - HTTPS
 # ==========================================================
 
 server {
 
-    listen 443 ssl default_server;
+    listen 443 ssl;
 
-    server_name _;
+    server_name $DOMAIN www.$DOMAIN;
 
 
     ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
@@ -872,54 +1018,95 @@ server {
 
 
     # ======================================================
-    # GX -> SUB
-    # ======================================================
-
-EOF
-
-
-    # ======================================================
-    # SUB ROUTE
-    # ======================================================
-
-    if [ "$INSTALL_SUB" = "yes" ]; then
-
-        cat >> "$NGINX_CONFIG" <<EOF
-
-    location /gx/ {
-
-        include proxy_params;
-
-        proxy_pass http://unix:$APP_DIR/sub.sock;
-
-    }
-
-
-EOF
-
-    fi
-
-
-    # ======================================================
-    # EVERYTHING ELSE -> PEAK
-    # ======================================================
-
-    cat >> "$NGINX_CONFIG" <<EOF
-
-    # ======================================================
-    # EVERYTHING ELSE -> PEAK
+    # EVERYTHING -> PEAK
     # ======================================================
 
     location / {
 
         include proxy_params;
 
-        proxy_pass http://unix:$APP_DIR/peak.sock;
+        proxy_pass http://unix:$APP_DIR/peak.sock:;
 
     }
 
 }
+
 EOF
+
+
+    # ======================================================
+    # SUB DOMAIN
+    # ======================================================
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        cat >> "$NGINX_CONFIG" <<EOF
+
+# ==========================================================
+# SUB DOMAIN - HTTP
+# ==========================================================
+
+server {
+
+    listen 80;
+
+    server_name $SUB_DOMAIN;
+
+    return 301 https://\$host\$request_uri;
+}
+
+
+# ==========================================================
+# SUB DOMAIN - HTTPS
+# ==========================================================
+
+server {
+
+    listen 443 ssl;
+
+    server_name $SUB_DOMAIN;
+
+
+    ssl_certificate /etc/letsencrypt/live/$SUB_DOMAIN/fullchain.pem;
+
+    ssl_certificate_key /etc/letsencrypt/live/$SUB_DOMAIN/privkey.pem;
+
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+
+    # ======================================================
+    # GX -> SUB
+    # ======================================================
+
+    location /gx/ {
+
+        include proxy_params;
+
+        proxy_pass http://unix:$APP_DIR/sub.sock:;
+
+    }
+
+
+    # ======================================================
+    # EVERYTHING ELSE ON SUB DOMAIN -> PEAK
+    # ======================================================
+
+    location / {
+
+        include proxy_params;
+
+        proxy_pass http://unix:$APP_DIR/peak.sock:;
+
+    }
+
+}
+
+EOF
+
+    fi
 
 
     # ======================================================
@@ -991,6 +1178,7 @@ EOF
     echo
     echo "Starting peak..."
 
+
     systemctl restart peak
 
     sleep 2
@@ -1003,6 +1191,7 @@ EOF
     echo
     echo "Starting bot..."
 
+
     systemctl restart bot
 
     sleep 2
@@ -1014,6 +1203,7 @@ EOF
 
     echo
     echo "Starting trade..."
+
 
     systemctl restart trade
 
@@ -1029,6 +1219,7 @@ EOF
         echo
         echo "Starting sub..."
 
+
         systemctl restart sub
 
         sleep 2
@@ -1042,6 +1233,7 @@ EOF
 
     echo
     echo "Starting Nginx..."
+
 
     systemctl enable nginx
 
@@ -1070,6 +1262,7 @@ EOF
     echo
     echo "Testing SSL renewal..."
 
+
     certbot renew --dry-run || true
 
 
@@ -1085,8 +1278,17 @@ EOF
     echo
 
 
-    echo -e "${BLUE}Website:${NC}"
+    echo -e "${BLUE}Main Website:${NC}"
     echo "https://$DOMAIN"
+
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo -e "${BLUE}Sub Website:${NC}"
+        echo "https://$SUB_DOMAIN/gx/"
+
+    fi
 
 
     echo
@@ -1109,20 +1311,19 @@ EOF
     echo "=========================================="
 
 
+    echo
+    echo "https://$DOMAIN/*"
+    echo "        -> peak.sock"
+
+
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         echo
-        echo "https://$DOMAIN/gx/*"
+        echo "https://$SUB_DOMAIN/gx/*"
         echo "        -> sub.sock"
 
         echo
-        echo "Everything else"
-        echo "        -> peak.sock"
-
-    else
-
-        echo
-        echo "Everything"
+        echo "https://$SUB_DOMAIN/*"
         echo "        -> peak.sock"
 
     fi
@@ -1139,8 +1340,17 @@ EOF
 
 
     echo
-    echo "SSL certificate:"
+    echo "Main SSL certificate:"
     echo "/etc/letsencrypt/live/$DOMAIN/"
+
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo "Sub SSL certificate:"
+        echo "/etc/letsencrypt/live/$SUB_DOMAIN/"
+
+    fi
 
 
     echo
@@ -1256,14 +1466,16 @@ remove_app() {
     echo
 
 
-    read -p "Enter domain: " DOMAIN
+    read -p "Enter main domain: " DOMAIN
 
     DOMAIN=$(clean_domain "$DOMAIN")
 
 
-    if [ -z "$DOMAIN" ]; then
+    if ! validate_domain "$DOMAIN"; then
 
-        echo -e "${RED}Domain cannot be empty.${NC}"
+        echo
+        echo -e "${RED}Invalid domain.${NC}"
+        echo
 
         exit 1
 
@@ -1288,6 +1500,39 @@ remove_app() {
     echo
 
 
+    read -p "Do you also want to remove a Sub domain SSL? [y/N]: " REMOVE_SUB
+
+
+    REMOVE_SUB_SSL="no"
+    REMOVE_SUB_DOMAIN=""
+
+
+    if [[ "$REMOVE_SUB" =~ ^[Yy]$ ]]; then
+
+        REMOVE_SUB_SSL="yes"
+
+        read -p "Enter Sub domain: " REMOVE_SUB_DOMAIN
+
+        REMOVE_SUB_DOMAIN=$(clean_domain "$REMOVE_SUB_DOMAIN")
+
+
+        if [ -z "$REMOVE_SUB_DOMAIN" ]; then
+
+            echo -e "${RED}Sub domain cannot be empty.${NC}"
+
+            exit 1
+
+        fi
+
+        echo
+        echo "SSL certificate for:"
+        echo "$REMOVE_SUB_DOMAIN"
+        echo "will also be removed."
+
+    fi
+
+
+    echo
     read -p "Type YES to continue: " CONFIRM
 
 
@@ -1403,16 +1648,33 @@ remove_app() {
 
 
     # ======================================================
-    # REMOVE SSL
+    # REMOVE MAIN SSL
     # ======================================================
 
     echo
-    echo "Removing SSL certificate..."
+    echo "Removing main SSL certificate..."
 
 
     certbot delete \
         --cert-name "$DOMAIN" \
         --non-interactive 2>/dev/null || true
+
+
+    # ======================================================
+    # REMOVE SUB SSL
+    # ======================================================
+
+    if [ "$REMOVE_SUB_SSL" = "yes" ]; then
+
+        echo
+        echo "Removing Sub SSL certificate..."
+
+
+        certbot delete \
+            --cert-name "$REMOVE_SUB_DOMAIN" \
+            --non-interactive 2>/dev/null || true
+
+    fi
 
 
     # ======================================================
