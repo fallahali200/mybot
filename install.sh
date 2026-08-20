@@ -70,7 +70,8 @@ clean_domain() {
     DOMAIN=$(echo "$DOMAIN" \
         | sed 's#https://##' \
         | sed 's#http://##' \
-        | sed 's#/$##')
+        | sed 's#/$##' \
+        | sed 's/[[:space:]]//g')
 
     echo "$DOMAIN"
 }
@@ -108,10 +109,10 @@ install_app() {
 
 
     # ======================================================
-    # DOMAIN
+    # MAIN DOMAIN
     # ======================================================
 
-    read -p "Enter your domain: " DOMAIN
+    read -p "Enter your main domain: " DOMAIN
 
     DOMAIN=$(clean_domain "$DOMAIN")
 
@@ -126,49 +127,111 @@ install_app() {
 
 
     # ======================================================
-    # SUB APPLICATION
+    # SUB APPLICATION QUESTION
     # ======================================================
 
+    SUB_DOMAIN=""
+    INSTALL_SUB="no"
+
     echo
     echo "=========================================="
-    echo "SUB APPLICATION"
+    echo "          SUB APPLICATION"
     echo "=========================================="
     echo
 
-    echo "Do you want to install the sub application"
+    echo "Do you want to install the Sub application"
     echo "on this server?"
     echo
     echo "If YES:"
-    echo "  /gx/ -> sub.sock"
+    echo
+    echo "  /gx/               -> sub.sock"
+    echo "  sub.yourdomain.com -> sub.sock"
     echo
     echo "If NO:"
-    echo "  /gx/ will not be configured."
+    echo
+    echo "  Only the main application will be installed."
     echo
 
-    read -p "Install sub application on this server? [y/N]: " INSTALL_SUB
+
+    read -p "Install Sub application on this server? [y/N]: " INSTALL_SUB_ANSWER
 
 
-    if [[ "$INSTALL_SUB" =~ ^[Yy]$ ]]; then
+    if [[ "$INSTALL_SUB_ANSWER" =~ ^[Yy]$ ]]; then
 
         INSTALL_SUB="yes"
 
         echo
-        echo -e "${GREEN}Sub application: ENABLED${NC}"
+        echo -e "${GREEN}Sub installation enabled.${NC}"
+        echo
+
+        # --------------------------------------------------
+        # SUB DOMAIN
+        # --------------------------------------------------
+
+        read -p "Enter Sub domain: " SUB_DOMAIN
+
+        SUB_DOMAIN=$(clean_domain "$SUB_DOMAIN")
+
+
+        if [ -z "$SUB_DOMAIN" ]; then
+
+            echo -e "${RED}Sub domain cannot be empty.${NC}"
+
+            exit 1
+
+        fi
+
+
+        if [ "$SUB_DOMAIN" = "$DOMAIN" ]; then
+
+            echo
+            echo -e "${RED}Sub domain cannot be the same as main domain.${NC}"
+            echo
+
+            exit 1
+
+        fi
+
+
+        echo
+        echo -e "${GREEN}Sub domain:${NC} $SUB_DOMAIN"
+
 
     else
 
         INSTALL_SUB="no"
 
         echo
-        echo -e "${YELLOW}Sub application: DISABLED${NC}"
+        echo -e "${YELLOW}Sub installation disabled.${NC}"
 
     fi
 
 
+    # ======================================================
+    # SUMMARY
+    # ======================================================
+
     echo
-    echo -e "${GREEN}Domain:${NC} $DOMAIN"
+    echo "=========================================="
+    echo "INSTALLATION SUMMARY"
+    echo "=========================================="
+    echo
+
+    echo -e "${GREEN}Main domain:${NC} $DOMAIN"
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo -e "${GREEN}Sub domain:${NC}  $SUB_DOMAIN"
+        echo -e "${GREEN}Sub app:${NC}     ENABLED"
+
+    else
+
+        echo -e "${YELLOW}Sub app:${NC}     DISABLED"
+
+    fi
+
+    echo
     echo -e "${GREEN}GitHub:${NC} $REPO"
-    echo -e "${GREEN}Sub application:${NC} $INSTALL_SUB"
     echo
 
 
@@ -271,25 +334,63 @@ install_app() {
     echo
     echo "Stopping Nginx..."
 
-
     systemctl stop nginx 2>/dev/null || true
 
 
     # ======================================================
-    # SSL CERTIFICATE
+    # SSL CERTIFICATES
     # ======================================================
 
     echo
     echo "=========================================="
-    echo "Getting SSL certificate..."
+    echo "Getting SSL certificates..."
     echo "=========================================="
+    echo
 
 
-    certbot certonly \
-        --standalone \
-        --agree-tos \
-        --register-unsafely-without-email \
-        -d "$DOMAIN"
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo "Main domain:"
+        echo "  $DOMAIN"
+
+        echo
+        echo "Sub domain:"
+        echo "  $SUB_DOMAIN"
+
+        echo
+        echo "Requesting certificates for both domains..."
+        echo
+
+
+        certbot certonly \
+            --standalone \
+            --agree-tos \
+            --register-unsafely-without-email \
+            --non-interactive \
+            -d "$DOMAIN" \
+            -d "www.$DOMAIN" \
+            -d "$SUB_DOMAIN"
+
+
+    else
+
+        echo "Main domain:"
+        echo "  $DOMAIN"
+
+        echo
+        echo "Requesting SSL certificate..."
+        echo
+
+
+        certbot certonly \
+            --standalone \
+            --agree-tos \
+            --register-unsafely-without-email \
+            --non-interactive \
+            -d "$DOMAIN" \
+            -d "www.$DOMAIN"
+
+    fi
 
 
     if [ $? -ne 0 ]; then
@@ -300,13 +401,18 @@ install_app() {
         echo "Make sure:"
         echo
         echo "1. Domain points to this server."
-        echo "2. Port 80 is open."
-        echo "3. No other service is using port 80."
+        echo "2. Sub domain points to this server if enabled."
+        echo "3. Port 80 is open."
+        echo "4. No other service is using port 80."
         echo
 
         exit 1
 
     fi
+
+
+    echo
+    echo -e "${GREEN}SSL certificate(s) installed successfully.${NC}"
 
 
     # ======================================================
@@ -415,10 +521,6 @@ install_app() {
     if [ ! -f "$BACKUP_SCRIPT" ]; then
 
         echo -e "${RED}ERROR: backup.py not found in GitHub repository.${NC}"
-        echo
-        echo "Expected:"
-        echo "$BACKUP_SCRIPT"
-        echo
 
         exit 1
 
@@ -441,10 +543,6 @@ install_app() {
     if [ ! -f "$TRADE_SCRIPT" ]; then
 
         echo -e "${RED}ERROR: trade.py not found in GitHub repository.${NC}"
-        echo
-        echo "Expected:"
-        echo "$TRADE_SCRIPT"
-        echo
 
         exit 1
 
@@ -467,10 +565,6 @@ install_app() {
     if [ ! -f "$CURRENCIES_FILE" ]; then
 
         echo -e "${RED}ERROR: currencies.json not found in GitHub repository.${NC}"
-        echo
-        echo "Expected:"
-        echo "$CURRENCIES_FILE"
-        echo
 
         exit 1
 
@@ -481,21 +575,16 @@ install_app() {
 
 
     # ======================================================
-    # CHECK SUB APPLICATION
+    # CHECK SUB.PY
     # ======================================================
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         echo
         echo "=========================================="
-        echo "Checking sub application..."
+        echo "Checking sub.py..."
         echo "=========================================="
 
-
-        # --------------------------------------------------
-        # CHANGE THIS FILE IF YOUR SUB APP USES ANOTHER
-        # PYTHON FILE.
-        # --------------------------------------------------
 
         if [ ! -f "$APP_DIR/sub.py" ]; then
 
@@ -767,17 +856,9 @@ EOF
         > /tmp/current_cron 2>/dev/null || true
 
 
-    # ======================================================
-    # BACKUP EVERY DAY 00:00
-    # ======================================================
-
     echo "0 0 * * * $VENV/bin/python $BACKUP_SCRIPT >> $BACKUP_LOG 2>&1" \
         >> /tmp/current_cron
 
-
-    # ======================================================
-    # INSTALL CRON
-    # ======================================================
 
     crontab /tmp/current_cron
 
@@ -790,14 +871,6 @@ EOF
     echo
     echo "Backup schedule:"
     echo "Every day at 00:00"
-
-    echo
-    echo "Backup command:"
-    echo "$VENV/bin/python $BACKUP_SCRIPT"
-
-    echo
-    echo "Backup log:"
-    echo "$BACKUP_LOG"
 
 
     # ======================================================
@@ -812,7 +885,7 @@ EOF
 
     cat > "$NGINX_CONFIG" <<EOF
 # ==========================================================
-# HTTP -> HTTPS
+# MAIN DOMAIN - HTTP
 # ==========================================================
 
 server {
@@ -826,7 +899,7 @@ server {
 
 
 # ==========================================================
-# HTTPS
+# MAIN DOMAIN - HTTPS
 # ==========================================================
 
 server {
@@ -846,20 +919,20 @@ server {
     ssl_ciphers HIGH:!aNULL:!MD5;
 
 
-    # ======================================================
-    # GX APPLICATION
-    # ======================================================
-
 EOF
 
 
     # ======================================================
-    # ADD GX ONLY IF SUB IS INSTALLED
+    # MAIN DOMAIN GX ROUTE
     # ======================================================
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         cat >> "$NGINX_CONFIG" <<EOF
+
+    # ======================================================
+    # GX APPLICATION
+    # ======================================================
 
     location /gx/ {
 
@@ -868,6 +941,7 @@ EOF
         proxy_pass http://unix:$APP_DIR/sub.sock;
 
     }
+
 
 EOF
 
@@ -894,6 +968,68 @@ EOF
 
 }
 EOF
+
+
+    # ======================================================
+    # SUB DOMAIN NGINX
+    # ======================================================
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        cat >> "$NGINX_CONFIG" <<EOF
+
+
+# ==========================================================
+# SUB DOMAIN - HTTP
+# ==========================================================
+
+server {
+
+    listen 80;
+
+    server_name $SUB_DOMAIN;
+
+    return 301 https://\$host\$request_uri;
+}
+
+
+# ==========================================================
+# SUB DOMAIN - HTTPS
+# ==========================================================
+
+server {
+
+    listen 443 ssl;
+
+    server_name $SUB_DOMAIN;
+
+
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+
+    # ======================================================
+    # SUB APPLICATION
+    # ======================================================
+
+    location / {
+
+        include proxy_params;
+
+        proxy_pass http://unix:$APP_DIR/sub.sock;
+
+    }
+
+}
+EOF
+
+    fi
 
 
     # ======================================================
@@ -965,7 +1101,6 @@ EOF
     echo
     echo "Starting peak..."
 
-
     systemctl restart peak
 
     sleep 2
@@ -978,7 +1113,6 @@ EOF
     echo
     echo "Starting bot..."
 
-
     systemctl restart bot
 
     sleep 2
@@ -990,7 +1124,6 @@ EOF
 
     echo
     echo "Starting trade..."
-
 
     systemctl restart trade
 
@@ -1006,7 +1139,6 @@ EOF
         echo
         echo "Starting sub..."
 
-
         systemctl restart sub
 
         sleep 2
@@ -1020,7 +1152,6 @@ EOF
 
     echo
     echo "Starting Nginx..."
-
 
     systemctl enable nginx
 
@@ -1049,7 +1180,6 @@ EOF
     echo
     echo "Testing SSL renewal..."
 
-
     certbot renew --dry-run || true
 
 
@@ -1065,38 +1195,32 @@ EOF
     echo
 
 
-    # ======================================================
-    # WEBSITE
-    # ======================================================
-
-    echo -e "${BLUE}Website:${NC}"
-
+    echo -e "${BLUE}Main Website:${NC}"
     echo "https://$DOMAIN"
 
 
-    # ======================================================
-    # APPLICATION
-    # ======================================================
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo -e "${BLUE}Sub Website:${NC}"
+        echo "https://$SUB_DOMAIN"
+
+        echo
+        echo -e "${BLUE}GX URL:${NC}"
+        echo "https://$DOMAIN/gx/"
+
+    fi
+
 
     echo
     echo -e "${BLUE}Application:${NC}"
-
     echo "$APP_DIR"
 
 
-    # ======================================================
-    # GITHUB
-    # ======================================================
-
     echo
     echo -e "${BLUE}GitHub:${NC}"
-
     echo "$REPO"
 
-
-    # ======================================================
-    # ROUTING
-    # ======================================================
 
     echo
     echo "=========================================="
@@ -1105,271 +1229,94 @@ EOF
 
 
     echo
-    echo "/ -> $APP_DIR/peak.sock"
+    echo "/ -> peak.sock"
 
 
     if [ "$INSTALL_SUB" = "yes" ]; then
 
-        echo
-        echo "/gx/ -> $APP_DIR/sub.sock"
+        echo "/gx/ -> sub.sock"
 
-        echo
-        echo -e "${GREEN}Sub application installed and enabled.${NC}"
-
-    else
-
-        echo
-        echo "/gx/ -> NOT CONFIGURED"
-
-        echo
-        echo -e "${YELLOW}Sub application was not installed.${NC}"
+        echo "$SUB_DOMAIN/ -> sub.sock"
 
     fi
 
 
-    # ======================================================
-    # BACKUP
-    # ======================================================
-
-    echo
-    echo -e "${BLUE}Backup:${NC}"
-
-    echo "$BACKUP_SCRIPT"
-
-
-    echo
-    echo -e "${BLUE}Backup schedule:${NC}"
-
-    echo "Every day at 00:00"
-
-
-    echo
-    echo -e "${BLUE}Backup log:${NC}"
-
-    echo "$BACKUP_LOG"
-
-
-    # ======================================================
-    # TRADE
-    # ======================================================
-
-    echo
-    echo -e "${BLUE}Trade:${NC}"
-
-    echo "$TRADE_SCRIPT"
-
-
-    echo
-    echo -e "${BLUE}Trade service:${NC}"
-
-    echo "trade.service"
-
-
-    echo
-    echo -e "${BLUE}Trade mode:${NC}"
-
-    echo "Always running"
-
-
-    echo
-    echo -e "${BLUE}Trade log:${NC}"
-
-    echo "journalctl -u trade -f"
-
-
-    # ======================================================
-    # PEAK STATUS
-    # ======================================================
-
     echo
     echo "=========================================="
-    echo "PEAK STATUS"
-    echo "=========================================="
-
-
-    systemctl --no-pager status peak || true
-
-
-    # ======================================================
-    # BOT STATUS
-    # ======================================================
-
-    echo
-    echo "=========================================="
-    echo "BOT STATUS"
-    echo "=========================================="
-
-
-    systemctl --no-pager status bot || true
-
-
-    # ======================================================
-    # TRADE STATUS
-    # ======================================================
-
-    echo
-    echo "=========================================="
-    echo "TRADE STATUS"
-    echo "=========================================="
-
-
-    systemctl --no-pager status trade || true
-
-
-    # ======================================================
-    # SUB STATUS
-    # ======================================================
-
-    if [ "$INSTALL_SUB" = "yes" ]; then
-
-        echo
-        echo "=========================================="
-        echo "SUB STATUS"
-        echo "=========================================="
-
-
-        systemctl --no-pager status sub || true
-
-    fi
-
-
-    # ======================================================
-    # NGINX STATUS
-    # ======================================================
-
-    echo
-    echo "=========================================="
-    echo "NGINX STATUS"
-    echo "=========================================="
-
-
-    systemctl --no-pager status nginx || true
-
-
-    # ======================================================
-    # BACKUP CRON
-    # ======================================================
-
-    echo
-    echo "=========================================="
-    echo "BACKUP CRON"
-    echo "=========================================="
-
-
-    crontab -l 2>/dev/null | grep "$BACKUP_SCRIPT" || true
-
-
-    # ======================================================
-    # TRADE SERVICE CHECK
-    # ======================================================
-
-    echo
-    echo "=========================================="
-    echo "TRADE SERVICE"
-    echo "=========================================="
-
-
-    systemctl is-enabled trade 2>/dev/null || true
-
-    systemctl is-active trade 2>/dev/null || true
-
-
-    # ======================================================
-    # SUB SERVICE CHECK
-    # ======================================================
-
-    if [ "$INSTALL_SUB" = "yes" ]; then
-
-        echo
-        echo "=========================================="
-        echo "SUB SERVICE"
-        echo "=========================================="
-
-
-        systemctl is-enabled sub 2>/dev/null || true
-
-        systemctl is-active sub 2>/dev/null || true
-
-    fi
-
-
-    # ======================================================
-    # COMMANDS
-    # ======================================================
-
-    echo
-    echo "=========================================="
-    echo "USEFUL COMMANDS"
+    echo "SSL"
     echo "=========================================="
 
 
     echo
-    echo "Trade status:"
+    echo "SSL auto renewal: ENABLED"
+
+    echo
+    echo "Renewal timer:"
+    echo "systemctl status certbot.timer"
+
+    echo
+    echo "Manual renewal:"
+    echo "certbot renew"
+
+    echo
+    echo "Renewal test:"
+    echo "certbot renew --dry-run"
+
+
+    echo
+    echo "=========================================="
+    echo "SERVICES"
+    echo "=========================================="
+
+
+    echo
+    echo "Peak:"
+    echo "systemctl status peak"
+
+    echo
+    echo "Bot:"
+    echo "systemctl status bot"
+
+    echo
+    echo "Trade:"
     echo "systemctl status trade"
 
 
-    echo
-    echo "Trade logs:"
-    echo "journalctl -u trade -f"
-
-
-    echo
-    echo "Bot status:"
-    echo "systemctl status bot"
-
-
-    echo
-    echo "Bot logs:"
-    echo "journalctl -u bot -f"
-
-
-    echo
-    echo "Peak status:"
-    echo "systemctl status peak"
-
-
-    echo
-    echo "Peak logs:"
-    echo "journalctl -u peak -f"
-
-
     if [ "$INSTALL_SUB" = "yes" ]; then
 
         echo
-        echo "Sub status:"
+        echo "Sub:"
         echo "systemctl status sub"
-
-
-        echo
-        echo "Sub logs:"
-        echo "journalctl -u sub -f"
-
-
-        echo
-        echo "Restart sub:"
-        echo "systemctl restart sub"
 
     fi
 
 
     echo
-    echo "Restart trade:"
-    echo "systemctl restart trade"
+    echo "=========================================="
+    echo "LOGS"
+    echo "=========================================="
 
 
     echo
-    echo "Restart bot:"
-    echo "systemctl restart bot"
-
-
-    echo
-    echo "Restart peak:"
-    echo "systemctl restart peak"
-
+    echo "Peak:"
+    echo "journalctl -u peak -f"
 
     echo
-    echo "Restart nginx:"
-    echo "systemctl restart nginx"
+    echo "Bot:"
+    echo "journalctl -u bot -f"
+
+    echo
+    echo "Trade:"
+    echo "journalctl -u trade -f"
+
+
+    if [ "$INSTALL_SUB" = "yes" ]; then
+
+        echo
+        echo "Sub:"
+        echo "journalctl -u sub -f"
+
+    fi
 
 
     echo
@@ -1397,7 +1344,7 @@ remove_app() {
     echo
 
 
-    read -p "Enter domain: " DOMAIN
+    read -p "Enter main domain: " DOMAIN
 
     DOMAIN=$(clean_domain "$DOMAIN")
 
@@ -1412,6 +1359,16 @@ remove_app() {
 
 
     echo
+    echo "If you installed a Sub domain, enter it."
+    echo "Otherwise just press Enter."
+    echo
+
+    read -p "Enter Sub domain: " SUB_DOMAIN
+
+    SUB_DOMAIN=$(clean_domain "$SUB_DOMAIN")
+
+
+    echo
     echo -e "${YELLOW}WARNING!${NC}"
     echo
     echo "The following will be removed:"
@@ -1423,6 +1380,15 @@ remove_app() {
     echo "  sub.service"
     echo "  Nginx configuration"
     echo "  SSL certificate for $DOMAIN"
+    
+
+    if [ -n "$SUB_DOMAIN" ]; then
+
+        echo "  SSL configuration for $SUB_DOMAIN"
+
+    fi
+
+
     echo "  Backup cron job"
     echo "  Backup log"
     echo "  Trade log"
@@ -1443,39 +1409,16 @@ remove_app() {
 
 
     # ======================================================
-    # STOP PEAK
+    # STOP SERVICES
     # ======================================================
 
     echo
-    echo "Stopping peak..."
+    echo "Stopping services..."
+
 
     systemctl stop peak 2>/dev/null || true
-
-
-    # ======================================================
-    # STOP BOT
-    # ======================================================
-
-    echo "Stopping bot..."
-
     systemctl stop bot 2>/dev/null || true
-
-
-    # ======================================================
-    # STOP TRADE
-    # ======================================================
-
-    echo "Stopping trade..."
-
     systemctl stop trade 2>/dev/null || true
-
-
-    # ======================================================
-    # STOP SUB
-    # ======================================================
-
-    echo "Stopping sub..."
-
     systemctl stop sub 2>/dev/null || true
 
 
@@ -1488,11 +1431,8 @@ remove_app() {
 
 
     systemctl disable peak 2>/dev/null || true
-
     systemctl disable bot 2>/dev/null || true
-
     systemctl disable trade 2>/dev/null || true
-
     systemctl disable sub 2>/dev/null || true
 
 
@@ -1505,11 +1445,8 @@ remove_app() {
 
 
     rm -f "$PEAK_SERVICE"
-
     rm -f "$BOT_SERVICE"
-
     rm -f "$TRADE_SERVICE"
-
     rm -f "$SUB_SERVICE"
 
 
@@ -1523,7 +1460,7 @@ remove_app() {
     # ======================================================
 
     echo
-    echo "Removing backup and trade cron jobs..."
+    echo "Removing cron jobs..."
 
 
     crontab -l 2>/dev/null \
@@ -1534,32 +1471,23 @@ remove_app() {
 
     crontab /tmp/current_cron 2>/dev/null || true
 
-
     rm -f /tmp/current_cron
 
 
     # ======================================================
-    # REMOVE BACKUP LOG
+    # REMOVE LOGS
     # ======================================================
 
     echo
-    echo "Removing backup log..."
+    echo "Removing logs..."
+
 
     rm -f "$BACKUP_LOG"
-
-
-    # ======================================================
-    # REMOVE TRADE LOG
-    # ======================================================
-
-    echo
-    echo "Removing trade log..."
-
     rm -f "$TRADE_LOG"
 
 
     # ======================================================
-    # REMOVE NGINX CONFIG
+    # REMOVE NGINX
     # ======================================================
 
     echo
@@ -1567,7 +1495,6 @@ remove_app() {
 
 
     rm -f /etc/nginx/sites-enabled/nginx.conf
-
     rm -f /etc/nginx/sites-available/nginx.conf
 
 
@@ -1578,15 +1505,16 @@ remove_app() {
     echo
     echo "Removing application..."
 
+
     rm -rf "$APP_DIR"
 
 
     # ======================================================
-    # REMOVE SSL
+    # REMOVE MAIN SSL
     # ======================================================
 
     echo
-    echo "Removing SSL certificate..."
+    echo "Removing main SSL certificate..."
 
 
     certbot delete \
