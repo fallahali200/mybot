@@ -742,7 +742,7 @@ server {
 
         include proxy_params;
 
-        proxy_pass http://unix:$APP_DIR/peak.sock;
+        proxy_pass http://unix:$APP_DIR/sub.sock;
 
     }
 
